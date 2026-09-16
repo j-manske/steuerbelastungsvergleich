@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steuerbelastungsvergleich der Rechtsformen &ndash; mehrperiodig</title>
+    <meta
+      name="description"
+      content="Mehrperiodiger steuerlicher Rechtsformvergleich: Personengesellschaft, § 34a EStG, GmbH und optierende Gesellschaft nach § 1a KStG."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="kopf">
+      <div class="kopf-inner">
+        <div>
+          <h1>Steuerbelastungsvergleich der Rechtsformen</h1>
+          <p class="untertitel">
+            <span id="untertitel-zeitraum">Mehrperiodiges Modell 2026&ndash;2032</span> &middot;
+            Personengesellschaft, § 34a EStG, GmbH und optierende Gesellschaft nach § 1a KStG
+          </p>
+        </div>
+        <button id="btn-methodik" class="ghost" type="button">Methodik &amp; Annahmen</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="eingaben" aria-label="Eingabeparameter">
+        <section class="karte">
+          <h2>Untersuchungsvariable</h2>
+          <div class="feld">
+            <label for="hebesatz">Gewerbesteuerhebesatz</label>
+            <div class="slider-zeile">
+              <input id="hebesatz" type="range" min="200" max="900" step="5" value="400" />
+              <div class="zahl-eingabe">
+                <input id="hebesatz-zahl" type="number" min="0" max="1200" step="5" value="400" />
+                <span>%</span>
+              </div>
+            </div>
+            <p class="hinweis" id="hebesatz-hinweis"></p>
+          </div>
+        </section>
+
+        <section class="karte">
+          <h2>Basisdaten</h2>
+          <div class="feld">
+            <label for="gewinn">Gewinn vor Steuern und Tätigkeitsvergütung</label>
+            <div class="zahl-eingabe breit">
+              <input id="gewinn" type="number" min="0" step="10000" value="300000" />
+              <span>EUR</span>
+            </div>
+          </div>
+          <div class="feld">
+            <label for="verguetung">Tätigkeitsvergütung / Geschäftsführergehalt</label>
+            <div class="zahl-eingabe breit">
+              <input id="verguetung" type="number" min="0" step="5000" value="0" />
+              <span>EUR</span>
+            </div>
+            <p class="hinweis">
+              In allen Ausprägungen betragsgleich und fremdüblich. Bei der Personengesellschaft
+              Sondervergütung (§ 15 Abs. 1 S. 1 Nr. 2 EStG), sonst abziehbare Betriebsausgabe.
+            </p>
+          </div>
+          <div class="feld">
+            <label for="thesaurierung">Thesaurierungsquote</label>
+            <div class="slider-zeile">
+              <input id="thesaurierung" type="range" min="0" max="100" step="5" value="100" />
+              <div class="zahl-eingabe">
+                <input id="thesaurierung-zahl" type="number" min="0" max="100" step="5" value="100" />
+                <span>%</span>
+              </div>
+            </div>
+          </div>
+          <div class="feld">
+            <label for="zins">Kalkulationszinssatz</label>
+            <div class="zahl-eingabe breit">
+              <input id="zins" type="number" min="0" max="20" step="0.25" value="3" />
+              <span>% p.a.</span>
+            </div>
+          </div>
+          <div class="feld zwei-spalten">
+            <div>
+              <label for="von-vz">Erster VZ</label>
+              <input id="von-vz" type="number" min="2024" max="2040" step="1" value="2026" />
+            </div>
+            <div>
+              <label for="dauer">Betrachtungsdauer</label>
+              <div class="zahl-eingabe">
+                <input id="dauer" type="number" min="1" max="30" step="1" value="7" />
+                <span>Jahre</span>
+              </div>
+            </div>
+          </div>
+          <div class="schnellwahl" id="dauer-schnellwahl">
+            <button type="button" data-dauer="1">1 Jahr</button>
+            <button type="button" data-dauer="5">5</button>
+            <button type="button" data-dauer="7">7 (Standard)</button>
+            <button type="button" data-dauer="10">10</button>
+            <button type="button" data-dauer="15">15</button>
+          </div>
+          <p class="hinweis" id="zeitraum-hinweis"></p>
+        </section>
+
+        <section class="karte">
+          <h2>Modellvarianten</h2>
+          <label class="schalter">
+            <input type="checkbox" id="opt-schluss" checked />
+            <span
+              >Vollständige Entnahme/Ausschüttung in der Schlussperiode
+              <em>Ohne diese Annahme erschiene die Stundung als endgültige Entlastung.</em></span
+            >
+          </label>
+          <label class="schalter">
+            <input type="checkbox" id="opt-mindest" checked />
+            <span
+              >Gesetzlichen Mindesthebesatz erzwingen
+              <em>280 % ab EZ 2027 (§ 16 Abs. 4 S. 2 GewStG).</em></span
+            >
+          </label>
+          <label class="schalter">
+            <input type="checkbox" id="opt-solz" checked />
+            <span
+              >SolZ-Freigrenze und Milderungszone
+              <em>§ 3 Abs. 3 bis 5 SolZG auf die Einkommensteuer.</em></span
+            >
+          </label>
+          <label class="schalter">
+            <input type="checkbox" id="opt-hoechst" />
+            <span
+              >§ 34a-Steuer im Ermäßigungshöchstbetrag
+              <em
+                >Standard aus: der Sondertarif mindert das nutzbare Anrechnungsvolumen des
+                § 35 EStG.</em
+              ></span
+            >
+          </label>
+          <label class="schalter">
+            <input type="checkbox" id="opt-fiktion" />
+            <span
+              >Ausschüttungsfiktion § 1a Abs. 3 S. 5 KStG
+              <em>Entnahmefähiges Gesellschafterkonto: Thesaurierung ausgeschlossen.</em></span
+            >
+          </label>
+        </section>
+
+        <section class="karte">
+          <h2>Kontrollrechnung</h2>
+          <label class="schalter">
+            <input type="checkbox" id="opt-kontrolle" />
+            <span
+              >Ohne Tätigkeitsvergütung gegenrechnen
+              <em>Zeigt den Einfluss der Vergütung auf die Rangfolge.</em></span
+            >
+          </label>
+          <div class="knopfreihe">
+            <button id="btn-reset" class="ghost" type="button">Basisszenario</button>
+            <button id="btn-csv" class="ghost" type="button">CSV-Export</button>
+          </div>
+        </section>
+      </aside>
+
+      <div class="ergebnisse">
+        <section class="karte" id="uebersicht-karte">
+          <div class="karte-kopf">
+            <h2>Barwert der Gesamtsteuerbelastung</h2>
+            <span class="badge" id="zeitraum-badge"></span>
+          </div>
+          <div class="varianten-raster" id="varianten-raster"></div>
+          <p class="fussnote" id="kontroll-hinweis" hidden></p>
+        </section>
+
+        <section class="karte">
+          <div class="karte-kopf">
+            <h2>Sensitivität gegenüber dem Hebesatz</h2>
+            <div class="segmente" role="tablist">
+              <button class="segment aktiv" data-mass="barwert" type="button">Barwert</button>
+              <button class="segment" data-mass="effektiv" type="button">Effektive Belastung</button>
+            </div>
+          </div>
+          <div id="chart-sensitivitaet"></div>
+          <div class="legende" id="legende-sensitivitaet"></div>
+          <p class="fussnote" id="schnittpunkte"></p>
+        </section>
+
+        <section class="karte">
+          <h2>Steuerbelastung je Periode</h2>
+          <div id="chart-perioden"></div>
+          <div class="legende" id="legende-perioden"></div>
+        </section>
+
+        <section class="karte">
+          <h2>Periodenübersicht</h2>
+          <div class="tabelle-scroll">
+            <table id="perioden-tabelle" class="tabelle"></table>
+          </div>
+        </section>
+
+        <section class="karte">
+          <div class="karte-kopf">
+            <h2>Ermittlungsschema im Detail</h2>
+            <div class="detail-wahl">
+              <select id="detail-variante" aria-label="Ausprägung"></select>
+              <select id="detail-periode" aria-label="Veranlagungszeitraum"></select>
+            </div>
+          </div>
+          <div class="tabelle-scroll">
+            <table id="detail-tabelle" class="tabelle detail"></table>
+          </div>
+          <ul class="hinweisliste" id="detail-hinweise"></ul>
+        </section>
+
+        <section class="karte">
+          <h2>Rechtsstand je Veranlagungszeitraum</h2>
+          <div class="tabelle-scroll">
+            <table id="rechtsstand-tabelle" class="tabelle"></table>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <dialog id="methodik">
+      <article>
+        <h2>Modellannahmen</h2>
+        <p>
+          Die Annahmen sind keine Realitätsbeschreibung, sondern eine bewusste Reduktion, die den
+          Untersuchungsgegenstand isoliert. Sie wirken über alle Ausprägungen einheitlich;
+          Belastungsunterschiede sind damit ausschließlich auf die rechtsformspezifische Systematik
+          und auf die Höhe des Hebesatzes zurückzuführen.
+        </p>
+        <table class="tabelle">
+          <thead>
+            <tr><th>Parameter</th><th>Annahme</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Gesellschafter</td><td>eine unbeschränkt steuerpflichtige natürliche Person, keine weiteren Einkünfte, keine Kirchensteuer</td></tr>
+            <tr><td>Gewinn vor Steuern</td><td>konstant über alle Perioden</td></tr>
+            <tr><td>Hebesatz</td><td>einzige variable Größe</td></tr>
+            <tr><td>Hinzurechnungen / Kürzungen</td><td>keine; Gewerbeertrag = Gewinn vor Steuern</td></tr>
+            <tr><td>Tätigkeitsvergütung</td><td>betragsgleich in allen Ausprägungen, fremdüblich</td></tr>
+            <tr><td>Sonderbetriebsvermögen</td><td>nicht vorhanden</td></tr>
+            <tr><td>Anrechnung § 35 EStG</td><td>ein Betrieb, keine Quotelung, kein Vor- oder Rücktrag von Überhängen</td></tr>
+            <tr><td>§ 34a EStG</td><td>Antragsvoraussetzungen erfüllt, keine Tatbestände des Abs. 6, voller Antrag</td></tr>
+            <tr><td>Ausschüttungsbesteuerung</td><td>Abgeltungsteuer; kein Teileinkünfteverfahren, keine Günstigerprüfung, kein Sparer-Pauschbetrag</td></tr>
+            <tr><td>Optierende Gesellschaft</td><td>nicht entnahmefähiges Gesellschafterkonto; Übergang und Rückoption nicht abgebildet</td></tr>
+            <tr><td>Schlussperiode</td><td>vollständige Ausschüttung bzw. Entnahme und Nachversteuerung</td></tr>
+            <tr><td>Rechtsstand</td><td>verabschiedete Satzänderungen periodengerecht; Einkommensteuertarif konstant (VZ 2026)</td></tr>
+            <tr><td>Thesauriertes Vermögen</td><td>keine Verzinsung; Diskontierung allein über den Kalkulationszinssatz</td></tr>
+            <tr><td>Sozialversicherung</td><td>bleibt außer Betracht</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Rechenweg</h3>
+        <p>
+          Die Berechnung durchläuft die Veranlagungszeiträume nacheinander. Fortgeschrieben werden
+          der nachversteuerungspflichtige Betrag nach § 34a Abs. 3 EStG sowie das thesaurierte
+          Vermögen der Kapitalgesellschaft. Die Ermittlung des begünstigungsfähigen Gewinns nach
+          § 34a Abs. 2 EStG ist zirkulär und wird durch Fixpunktiteration aufgelöst. Erst im
+          Anschluss werden die Zahlungen &ndash; jeweils zum Periodenende &ndash; auf den Beginn des
+          ersten Veranlagungszeitraums diskontiert.
+        </p>
+
+        <h3>Grenzen</h3>
+        <ul>
+          <li>Der Übergangsvorgang nach § 1a Abs. 2 KStG (Formwechsel i.S.d. § 1 Abs. 3 Nr. 3 UmwStG), die Sperrfrist des § 22 UmwStG und die Rückoption bleiben unberücksichtigt. Das verzerrt den Vergleich tendenziell zugunsten der Option.</li>
+          <li>Anrechnungsüberhänge nach § 35 EStG verfallen periodisch; das Gesetz sieht weder Vor- noch Rücktrag vor.</li>
+          <li>Die Ergebnisse sind Modellrechnungen und ersetzen keine steuerliche Beratung im Einzelfall.</li>
+        </ul>
+        <form method="dialog"><button class="primaer" type="submit">Schließen</button></form>
+      </article>
+    </dialog>
+
+    <footer class="fuss">
+      <p>
+        Modellrechnung ohne Gewähr. Rechtsstand: Gesetz für ein steuerliches Investitionssofortprogramm
+        vom 18.07.2025 (BGBl. 2025 I Nr. 161). Keine steuerliche Beratung.
+      </p>
+    </footer>
+
+    <script type="module" src="src/ui/app.js"></script>
+  </body>
+</html>
