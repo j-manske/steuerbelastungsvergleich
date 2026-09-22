@@ -1,4 +1,10 @@
-import { berechne, sensitivitaet, VARIANTEN, STANDARD_SZENARIO } from '../core/model.js';
+import {
+  berechne,
+  sensitivitaet,
+  VARIANTEN,
+  STANDARD_SZENARIO,
+  STANDARD_OPTIONEN,
+} from '../core/model.js';
 import { rechtsstandTabelle, REFERENZ_TARIF_VZ } from '../core/rates.js';
 import { linienDiagramm, saeulenDiagramm, legende } from './chart.js';
 import { eur, eurExakt, eurKompakt, prozent, ganz, csvZahl } from './format.js';
@@ -8,13 +14,23 @@ const $ = (id) => document.getElementById(id);
 /** Standarddauer aus dem Basisszenario der Arbeit (2026-2032). */
 const STANDARD_DAUER = STANDARD_SZENARIO.bisVz - STANDARD_SZENARIO.vonVz + 1;
 
+/**
+ * Hebesatzspanne der Sensitivitaetsanalyse nach Abschnitt 2.3 der Arbeit:
+ * von der gesetzlichen Untergrenze des § 16 Abs. 4 S. 2 GewStG bis zum oberen
+ * Rand des Bereichs, in dem sich die weit ueberwiegende Zahl der Gemeinden bewegt.
+ */
+const SENS_VON = 280;
+const SENS_BIS = 600;
+
 const felder = {
   hebesatz: $('hebesatz'),
   hebesatzZahl: $('hebesatz-zahl'),
   gewinn: $('gewinn'),
   verguetung: $('verguetung'),
-  thesaurierung: $('thesaurierung'),
-  thesaurierungZahl: $('thesaurierung-zahl'),
+  // Die Oberflaeche fragt die Entnahme-/Ausschuettungsquote ab (Abschnitt 2.4
+  // der Arbeit); der Kern rechnet weiterhin mit der Gegengroesse.
+  entnahme: $('entnahme'),
+  entnahmeZahl: $('entnahme-zahl'),
   zins: $('zins'),
   vonVz: $('von-vz'),
   dauer: $('dauer'),
@@ -41,8 +57,9 @@ function leseSzenario() {
 
   return {
     gewinn: Math.max(0, zahl(felder.gewinn, 300000)),
-    verguetung: Math.max(0, zahl(felder.verguetung, 0)),
-    thesaurierungsquote: Math.min(1, Math.max(0, zahl(felder.thesaurierung, 100) / 100)),
+    verguetung: Math.max(0, zahl(felder.verguetung, STANDARD_SZENARIO.verguetung)),
+    thesaurierungsquote:
+      1 - Math.min(1, Math.max(0, zahl(felder.entnahmeZahl, 0) / 100)),
     hebesatz: Math.max(0, zahl(felder.hebesatzZahl, 400)),
     kalkulationszins: Math.max(0, zahl(felder.zins, 3) / 100),
     vonVz,
@@ -86,15 +103,19 @@ function zeichneVarianten(ergebnis, kontrolle) {
 
   const s = ergebnis.szenario;
   $('zeitraum-badge').textContent =
-    `VZ ${s.vonVz}–${s.bisVz} · Hebesatz ${ganz(s.hebesatz)} % · Thesaurierung ${ganz(
-      s.thesaurierungsquote * 100
+    `VZ ${s.vonVz}–${s.bisVz} · Hebesatz ${ganz(s.hebesatz)} % · Entnahmequote ${ganz(
+      (1 - s.thesaurierungsquote) * 100
     )} % · i = ${ganz(s.kalkulationszins * 100)} %`;
 }
 
 /* ---------------- Diagramme ---------------- */
 
 function zeichneSensitivitaet(szenario) {
-  const { punkte, schnittpunkte } = sensitivitaet(szenario, { von: 200, bis: 700, schritt: 5 });
+  // Untersuchungsbereich nach Abschnitt 2.3. Liegt der eingestellte Hebesatz
+  // ausserhalb, wird die Spanne erweitert, damit die Markierung sichtbar bleibt.
+  const von = Math.min(SENS_VON, Math.floor(szenario.hebesatz / 5) * 5);
+  const bis = Math.max(SENS_BIS, Math.ceil(szenario.hebesatz / 5) * 5);
+  const { punkte, schnittpunkte } = sensitivitaet(szenario, { von, bis, schritt: 5 });
   const daten = punkte.map((p) => ({
     x: p.hebesatz,
     werte: Object.fromEntries(VARIANTEN.map((v) => [v.key, p.werte[v.key][sensMass]])),
@@ -114,7 +135,7 @@ function zeichneSensitivitaet(szenario) {
   });
   legende($('legende-sensitivitaet'), VARIANTEN.map((v) => ({ ...v, label: v.label })));
 
-  const relevant = schnittpunkte.filter((s) => s.hebesatz >= 200 && s.hebesatz <= 700);
+  const relevant = schnittpunkte.filter((s) => s.hebesatz >= von && s.hebesatz <= bis);
   const einmalig = [];
   for (const s of relevant) {
     const key = `${s.a}|${s.b}`;
@@ -263,7 +284,7 @@ function csvExport() {
   zeilen.push('Parameter;Wert');
   zeilen.push(`Gewinn vor Steuern;${csvZahl(s.gewinn)}`);
   zeilen.push(`Taetigkeitsverguetung;${csvZahl(s.verguetung)}`);
-  zeilen.push(`Thesaurierungsquote;${csvZahl(s.thesaurierungsquote * 100)}`);
+  zeilen.push(`Entnahme-/Ausschuettungsquote;${csvZahl((1 - s.thesaurierungsquote) * 100)}`);
   zeilen.push(`Hebesatz;${csvZahl(s.hebesatz)}`);
   zeilen.push(`Kalkulationszins;${csvZahl(s.kalkulationszins * 100)}`);
   zeilen.push(`Zeitraum;${s.vonVz}-${s.bisVz}`);
@@ -290,7 +311,6 @@ function csvExport() {
 /* ---------------- Steuerung ---------------- */
 
 function aktualisiereHebesatzHinweis(szenario) {
-  const untergrenzen = [...new Set(szenario.optionen.mindesthebesatzErzwingen ? [200, 280] : [])];
   const angehoben = szenario.optionen.mindesthebesatzErzwingen && szenario.hebesatz < 280;
   const el = $('hebesatz-hinweis');
   if (angehoben) {
@@ -299,9 +319,8 @@ function aktualisiereHebesatzHinweis(szenario) {
   } else {
     el.className = 'hinweis';
     el.textContent =
-      'Das Vierfache des Messbetrags nach § 35 EStG entspricht rechnerisch einem Hebesatz von 400 %. Oberhalb entsteht bei Personengesellschaften ein Anrechnungsüberhang.';
+      'Das Vierfache des Messbetrags nach § 35 EStG entspricht rechnerisch einem Hebesatz von 400 %; oberhalb entsteht bei Personengesellschaften ein Anrechnungsüberhang. Der gewogene Bundesdurchschnitt liegt bei rund 400 % und fällt damit nahezu mit dieser Grenze zusammen.';
   }
-  void untergrenzen;
 }
 
 /** Zeigt den abgeleiteten Zeitraum und weist auf fortgeschriebenen Rechtsstand hin. */
@@ -375,22 +394,25 @@ function setzeZurueck() {
   felder.verguetung.value = s.verguetung;
   felder.hebesatz.value = s.hebesatz;
   felder.hebesatzZahl.value = s.hebesatz;
-  felder.thesaurierung.value = s.thesaurierungsquote * 100;
-  felder.thesaurierungZahl.value = s.thesaurierungsquote * 100;
+  const entnahme = (1 - s.thesaurierungsquote) * 100;
+  felder.entnahme.value = entnahme;
+  felder.entnahmeZahl.value = entnahme;
   felder.zins.value = s.kalkulationszins * 100;
   felder.vonVz.value = s.vonVz;
   felder.dauer.value = STANDARD_DAUER;
-  felder.optSchluss.checked = true;
-  felder.optMindest.checked = true;
-  felder.optSolz.checked = true;
-  felder.optHoechst.checked = false;
-  felder.optFiktion.checked = false;
+  // Die Modellvarianten werden aus den Standardoptionen des Kerns abgeleitet,
+  // damit Oberflaeche und Berechnungskern nicht auseinanderlaufen koennen.
+  felder.optSchluss.checked = STANDARD_OPTIONEN.schlussausschuettung;
+  felder.optMindest.checked = STANDARD_OPTIONEN.mindesthebesatzErzwingen;
+  felder.optSolz.checked = STANDARD_OPTIONEN.solzFreigrenze;
+  felder.optHoechst.checked = STANDARD_OPTIONEN.est34aImHoechstbetrag;
+  felder.optFiktion.checked = STANDARD_OPTIONEN.ausschuettungsfiktion1a;
   felder.optKontrolle.checked = false;
   rechne();
 }
 
 koppleSlider(felder.hebesatz, felder.hebesatzZahl);
-koppleSlider(felder.thesaurierung, felder.thesaurierungZahl);
+koppleSlider(felder.entnahme, felder.entnahmeZahl);
 [
   felder.gewinn,
   felder.verguetung,

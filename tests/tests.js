@@ -130,7 +130,12 @@ T('PersG Regelbesteuerung: Entnahmequote ist ohne Einfluss', () => {
 /* ---------------- § 34a EStG ---------------- */
 
 T('§ 34a EStG: voller Antrag beguenstigt den gesamten Gewinn (Rueckausnahme Abs. 2 S. 2)', () => {
-  const e = berechne(basis({ optionen: { schlussausschuettung: false } }));
+  // Gegenauffassung: die Steuer auf den beguenstigten Gewinn bleibt beim
+  // Ermaessigungshoechstbetrag des § 35 EStG au§er Ansatz, die Anrechnung
+  // laeuft dann vollstaendig leer.
+  const e = berechne(
+    basis({ optionen: { schlussausschuettung: false, est34aImHoechstbetrag: false } })
+  );
   const p = e.varianten.persG34a.perioden[0];
   const beguenstigt = p.posten.find((x) => x.label === 'begünstigungsfähiger Gewinn');
   nah(beguenstigt.betrag, 300000, 1);
@@ -139,17 +144,20 @@ T('§ 34a EStG: voller Antrag beguenstigt den gesamten Gewinn (Rueckausnahme Abs
   nah(p.gesamt, 38570 + 84750 + 0.055 * 84750);
 });
 
-T('§ 34a EStG: voller Sondertarif zehrt den Ermäßigungshöchstbetrag auf', () => {
-  const e = berechne(basis({ optionen: { schlussausschuettung: false } }));
+T('§ 34a EStG: ohne Einbeziehung zehrt der Sondertarif den Höchstbetrag auf', () => {
+  const e = berechne(
+    basis({ optionen: { schlussausschuettung: false, est34aImHoechstbetrag: false } })
+  );
   const p = e.varianten.persG34a.perioden[0];
   const ueberhang = p.posten.find((x) => x.label.startsWith('Anrechnungsüberhang'));
   nah(ueberhang.betrag, 4 * 9642.5, 1);
 });
 
-T('§ 34a EStG: Option "im Hoechstbetrag" stellt die Anrechnung wieder her', () => {
-  const e = berechne(
-    basis({ optionen: { schlussausschuettung: false, est34aImHoechstbetrag: true } })
-  );
+T('§ 34a EStG: Einbeziehung in den Hoechstbetrag ist Standard und erhaelt die Anrechnung', () => {
+  // Auffassung der Finanzverwaltung, der die Arbeit folgt: Steuer auf den
+  // beguenstigten Gewinn und Nachsteuer gehen in den Hoechstbetrag ein.
+  gleich(STANDARD_SZENARIO.optionen.est34aImHoechstbetrag, true);
+  const e = berechne(basis({ optionen: { schlussausschuettung: false } }));
   const p = e.varianten.persG34a.perioden[0];
   const ueberhang = p.posten.find((x) => x.label.startsWith('Anrechnungsüberhang'));
   nah(ueberhang.betrag, 0, 1);

@@ -52,8 +52,8 @@ export const STANDARD_OPTIONEN = {
   /** Gesetzlichen Mindesthebesatz je VZ erzwingen (§ 16 Abs. 4 S. 2 GewStG). */
   mindesthebesatzErzwingen: true,
   /** Steuer nach § 34a Abs. 1 EStG in den Ermäßigungshöchstbetrag des
-   *  § 35 EStG einbeziehen. Standard: nein (Abschnitt 2.2 der Arbeit). */
-  est34aImHoechstbetrag: false,
+   *  § 35 EStG einbeziehen. Standard: ja */
+  est34aImHoechstbetrag: true,
   /** Ausschüttungsfiktion des § 1a Abs. 3 S. 5 KStG bei entnahmefaehigem
    *  Gesellschafterkonto - Thesaurierung dann nicht moeglich. */
   ausschuettungsfiktion1a: false,
@@ -63,7 +63,12 @@ export const STANDARD_OPTIONEN = {
 
 export const STANDARD_SZENARIO = {
   gewinn: 300000,
-  verguetung: 0,
+  /**
+   * Fremduebliches Geschaeftsfuehrergehalt, in allen Auspraegungen betragsgleich
+   * (Abschnitt 2.2 der Arbeit). Der vollstaendige Verzicht auf eine Verguetung
+   * dient in Kapitel 3 nur noch als Kontrollrechnung.
+   */
+  verguetung: 120000,
   thesaurierungsquote: 1,
   hebesatz: 400,
   kalkulationszins: 0.03,

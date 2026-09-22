@@ -92,17 +92,25 @@ der Tabelle „Rechtsstand je Veranlagungszeitraum" als solche gekennzeichnet.
 ## Modellannahmen
 
 Die vollständige Annahmenübersicht ist im Tool über die Schaltfläche
-„Methodik & Annahmen" abrufbar. Sie entspricht Tabelle 2 der Arbeit. Zentral:
+„Methodik & Annahmen" abrufbar. Sie entspricht Tabelle 1 der Arbeit. Zentral:
 
 - Gesellschafter: eine unbeschränkt steuerpflichtige natürliche Person, keine weiteren
   Einkünfte, keine Kirchensteuer
 - Hinzurechnungen und Kürzungen (§§ 8, 9 GewStG) bleiben außer Betracht
+- Tätigkeitsvergütung in allen Ausprägungen betragsgleich und fremdüblich
+  (Basisszenario 120.000 EUR); der Verzicht auf eine Vergütung dient als
+  Kontrollrechnung
 - Ausschüttungen unterliegen der Abgeltungsteuer; kein Teileinkünfteverfahren, keine
   Günstigerprüfung, kein Sparer-Pauschbetrag
 - In der Schlussperiode vollständige Entnahme bzw. Ausschüttung samt Nachversteuerung
   nach § 34a Abs. 4 EStG
 - Thesauriertes Vermögen wird nicht verzinst; die Zeitwirkung wird allein über den
-  Kalkulationszinssatz abgebildet
+  Kalkulationszinssatz abgebildet. Erträge aus der Wiederanlage thesaurierter Mittel
+  bildet das Modell nicht ab
+- Die Entnahme- bzw. Ausschüttungsquote bezieht sich bei der Personengesellschaft auf
+  den Gewinn vor Einkommensteuer, bei den Kapitalgesellschaften auf den Jahresüberschuss
+  nach Körperschaft- und Gewerbesteuer; die zufließenden Beträge sind daher bei gleicher
+  Quote nicht identisch
 
 Über die Schaltflächen unter „Modellvarianten" lassen sich einzelne Annahmen umschalten,
 etwa die Einbeziehung des Sondertarifs nach § 34a EStG in den Ermäßigungshöchstbetrag des
@@ -111,7 +119,12 @@ etwa die Einbeziehung des Sondertarifs nach § 34a EStG in den Ermäßigungshöc
 ## Bedienung
 
 - **Gewerbesteuerhebesatz** ist die Untersuchungsvariable; das Sensitivitätsdiagramm
-  zeigt den Verlauf von 200 % bis 700 % und markiert den eingestellten Wert.
+  zeigt den Verlauf von 280 % bis 600 % (Abschnitt 2.3 der Arbeit: gesetzliche
+  Untergrenze nach § 16 Abs. 4 S. 2 GewStG bis zum oberen Rand des Gemeindebereichs) und
+  markiert den eingestellten Wert. Das Zahlenfeld lässt darüber hinausgehende Werte zu;
+  die Diagrammspanne wird dann entsprechend erweitert.
+- **Entnahme- bzw. Ausschüttungsquote** gibt den laufend entnommenen Anteil an; der Rest
+  wird thesauriert. Voreingestellt sind 0 % (Vollthesaurierung).
 - **Betrachtungsdauer** wird in Jahren angegeben, der letzte VZ ergibt sich daraus.
   Voreingestellt sind sieben Perioden ab 2026, also genau der Zeitraum, für den ein
   verabschiedeter Rechtsstand vorliegt. Über die Schnellwahl sind 1, 5, 7, 10 und 15

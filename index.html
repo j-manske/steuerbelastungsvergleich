@@ -31,7 +31,7 @@
           <div class="feld">
             <label for="hebesatz">Gewerbesteuerhebesatz</label>
             <div class="slider-zeile">
-              <input id="hebesatz" type="range" min="200" max="900" step="5" value="400" />
+              <input id="hebesatz" type="range" min="280" max="600" step="5" value="400" />
               <div class="zahl-eingabe">
                 <input id="hebesatz-zahl" type="number" min="0" max="1200" step="5" value="400" />
                 <span>%</span>
@@ -53,7 +53,7 @@
           <div class="feld">
             <label for="verguetung">Tätigkeitsvergütung / Geschäftsführergehalt</label>
             <div class="zahl-eingabe breit">
-              <input id="verguetung" type="number" min="0" step="5000" value="0" />
+              <input id="verguetung" type="number" min="0" step="5000" value="120000" />
               <span>EUR</span>
             </div>
             <p class="hinweis">
@@ -62,14 +62,19 @@
             </p>
           </div>
           <div class="feld">
-            <label for="thesaurierung">Thesaurierungsquote</label>
+            <label for="entnahme">Entnahme- bzw. Ausschüttungsquote</label>
             <div class="slider-zeile">
-              <input id="thesaurierung" type="range" min="0" max="100" step="5" value="100" />
+              <input id="entnahme" type="range" min="0" max="100" step="5" value="0" />
               <div class="zahl-eingabe">
-                <input id="thesaurierung-zahl" type="number" min="0" max="100" step="5" value="100" />
+                <input id="entnahme-zahl" type="number" min="0" max="100" step="5" value="0" />
                 <span>%</span>
               </div>
             </div>
+            <p class="hinweis">
+              Laufend entnommener bzw. ausgeschütteter Anteil; der Rest wird thesauriert. Bezugsgröße
+              ist bei der Personengesellschaft der Gewinn vor Einkommensteuer, bei GmbH und
+              optierender Gesellschaft der Jahresüberschuss nach Körperschaft- und Gewerbesteuer.
+            </p>
           </div>
           <div class="feld">
             <label for="zins">Kalkulationszinssatz</label>
@@ -125,12 +130,13 @@
             >
           </label>
           <label class="schalter">
-            <input type="checkbox" id="opt-hoechst" />
+            <input type="checkbox" id="opt-hoechst" checked />
             <span
               >§ 34a-Steuer im Ermäßigungshöchstbetrag
               <em
-                >Standard aus: der Sondertarif mindert das nutzbare Anrechnungsvolumen des
-                § 35 EStG.</em
+                >Standard an: Auffassung der Finanzverwaltung, wonach die Steuer auf den begünstigten
+                Gewinn und die Nachsteuer in den Höchstbetrag des § 35 EStG eingehen. Aus:
+                Gegenauffassung, der Sondertarif mindert dann das nutzbare Anrechnungsvolumen.</em
               ></span
             >
           </label>
@@ -149,7 +155,10 @@
             <input type="checkbox" id="opt-kontrolle" />
             <span
               >Ohne Tätigkeitsvergütung gegenrechnen
-              <em>Zeigt den Einfluss der Vergütung auf die Rangfolge.</em></span
+              <em
+                >Zweite vertretbare Modellierung nach Abschnitt 2.2: vollständiger Verzicht auf eine
+                Vergütung. Zeigt deren Einfluss auf Niveau und Rangfolge.</em
+              ></span
             >
           </label>
           <div class="knopfreihe">
@@ -225,7 +234,8 @@
           Die Annahmen sind keine Realitätsbeschreibung, sondern eine bewusste Reduktion, die den
           Untersuchungsgegenstand isoliert. Sie wirken über alle Ausprägungen einheitlich;
           Belastungsunterschiede sind damit ausschließlich auf die rechtsformspezifische Systematik
-          und auf die Höhe des Hebesatzes zurückzuführen.
+          und auf die Höhe des Hebesatzes zurückzuführen. Die Übersicht entspricht Tabelle 1 der
+          Arbeit.
         </p>
         <table class="tabelle">
           <thead>
@@ -234,14 +244,15 @@
           <tbody>
             <tr><td>Gesellschafter</td><td>eine unbeschränkt steuerpflichtige natürliche Person, keine weiteren Einkünfte, keine Kirchensteuer</td></tr>
             <tr><td>Gewinn vor Steuern</td><td>konstant über alle Perioden</td></tr>
-            <tr><td>Hebesatz</td><td>einzige variable Größe</td></tr>
+            <tr><td>Hebesatz</td><td>einzige variable Größe; Sensitivität im Bereich 280 % bis 600 %. Der gewogene Bundesdurchschnitt liegt bei rund 400 % und fällt damit nahezu mit der Anrechnungsgrenze des § 35 EStG zusammen.</td></tr>
             <tr><td>Hinzurechnungen / Kürzungen</td><td>keine; Gewerbeertrag = Gewinn vor Steuern</td></tr>
-            <tr><td>Tätigkeitsvergütung</td><td>betragsgleich in allen Ausprägungen, fremdüblich</td></tr>
+            <tr><td>Tätigkeitsvergütung</td><td>betragsgleich in allen Ausprägungen, fremdüblich. Bei der Personengesellschaft Sondervergütung nach § 15 Abs. 1 S. 1 Nr. 2 EStG i.V.m. § 7 GewStG, bei GmbH und optierender Gesellschaft abziehbare Betriebsausgabe. Der vollständige Verzicht auf eine Vergütung dient nur als Kontrollrechnung.</td></tr>
+            <tr><td>Entnahme- bzw. Ausschüttungsquote</td><td>konstant; Bezugsgröße bei der Personengesellschaft der Gewinn vor Einkommensteuer, bei den Kapitalgesellschaften der Jahresüberschuss nach Körperschaft- und Gewerbesteuer</td></tr>
             <tr><td>Sonderbetriebsvermögen</td><td>nicht vorhanden</td></tr>
             <tr><td>Anrechnung § 35 EStG</td><td>ein Betrieb, keine Quotelung, kein Vor- oder Rücktrag von Überhängen</td></tr>
-            <tr><td>§ 34a EStG</td><td>Antragsvoraussetzungen erfüllt, keine Tatbestände des Abs. 6, voller Antrag</td></tr>
-            <tr><td>Ausschüttungsbesteuerung</td><td>Abgeltungsteuer; kein Teileinkünfteverfahren, keine Günstigerprüfung, kein Sparer-Pauschbetrag</td></tr>
-            <tr><td>Optierende Gesellschaft</td><td>nicht entnahmefähiges Gesellschafterkonto; Übergang und Rückoption nicht abgebildet</td></tr>
+            <tr><td>§ 34a EStG</td><td>Antragsvoraussetzungen des Abs. 1 S. 1 erfüllt (Gewinnanteil über 10 % oder über 10.000 EUR), keine Tatbestände des Abs. 6, voller Antrag</td></tr>
+            <tr><td>Ausschüttungsbesteuerung</td><td>Abgeltungsteuer nach § 32d Abs. 1 EStG; kein Teileinkünfteverfahren, keine Günstigerprüfung, kein Sparer-Pauschbetrag. Das Teileinkünfteverfahren wäre erst unterhalb eines Grenzsteuersatzes von rund 41,7 % vorteilhaft, die Günstigerprüfung erst unterhalb von 25 %.</td></tr>
+            <tr><td>Optierende Gesellschaft</td><td>nicht entnahmefähiges Gesellschafterkonto unterstellt, da das Stehenlassen auf einem entnahmefähigen Konto bereits die Ausschüttungsfiktion des § 1a Abs. 3 S. 5 KStG auslöste; Übergang nach § 1a Abs. 2 KStG und Rückoption nach § 1a Abs. 4 KStG nicht abgebildet</td></tr>
             <tr><td>Schlussperiode</td><td>vollständige Ausschüttung bzw. Entnahme und Nachversteuerung</td></tr>
             <tr><td>Rechtsstand</td><td>verabschiedete Satzänderungen periodengerecht; Einkommensteuertarif konstant (VZ 2026)</td></tr>
             <tr><td>Thesauriertes Vermögen</td><td>keine Verzinsung; Diskontierung allein über den Kalkulationszinssatz</td></tr>
@@ -263,6 +274,8 @@
         <ul>
           <li>Der Übergangsvorgang nach § 1a Abs. 2 KStG (Formwechsel i.S.d. § 1 Abs. 3 Nr. 3 UmwStG), die Sperrfrist des § 22 UmwStG und die Rückoption bleiben unberücksichtigt. Das verzerrt den Vergleich tendenziell zugunsten der Option.</li>
           <li>Anrechnungsüberhänge nach § 35 EStG verfallen periodisch; das Gesetz sieht weder Vor- noch Rücktrag vor.</li>
+          <li>Der Barwert erfasst den Stundungsvorteil nur über die Diskontierung. Erträge aus der Wiederanlage thesaurierter Mittel und deren rechtsformabhängige Besteuerung bildet das Modell nicht ab; der Zeiteffekt wird daher nur näherungsweise erfasst.</li>
+          <li>Die Entnahmequote bezieht sich bei der Personengesellschaft auf den Gewinn vor Einkommensteuer, bei den Kapitalgesellschaften auf den Jahresüberschuss nach Körperschaft- und Gewerbesteuer. Die dem Gesellschafter zufließenden Beträge sind daher bei gleicher Quote nicht identisch.</li>
           <li>Die Ergebnisse sind Modellrechnungen und ersetzen keine steuerliche Beratung im Einzelfall.</li>
         </ul>
         <form method="dialog"><button class="primaer" type="submit">Schließen</button></form>
