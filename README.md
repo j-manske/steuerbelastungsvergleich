@@ -150,7 +150,8 @@ etwa die Einbeziehung des Sondertarifs nach § 34a EStG in den Ermäßigungshöc
   markiert den eingestellten Wert. Das Zahlenfeld lässt darüber hinausgehende Werte zu;
   die Diagrammspanne wird dann entsprechend erweitert.
 - **Entnahme- bzw. Ausschüttungsquote** gibt den laufend entnommenen Anteil an; der Rest
-  wird thesauriert. Voreingestellt sind 0 % (Vollthesaurierung).
+  wird thesauriert. Voreingestellt sind 50 %, also hälftige Entnahme und hälftige
+  Thesaurierung.
 - **Betrachtungsdauer** wird in Jahren angegeben, der letzte VZ ergibt sich daraus.
   Voreingestellt sind sieben Perioden ab 2026, also genau der Zeitraum, für den ein
   verabschiedeter Rechtsstand vorliegt. Über die Schnellwahl sind 1, 5, 7, 10 und 15
