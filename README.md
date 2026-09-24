@@ -22,7 +22,7 @@ src/core/rates.js   Rechtsstandstabelle je Veranlagungszeitraum
 src/core/tarif.js   Steuerliche Grundfunktionen (§ 32a EStG, SolZ, GewSt, § 35 EStG)
 src/core/model.js   Periodenmodell der vier Ausprägungen, Sensitivität, Barwerte
 src/ui/             Darstellung: Diagramme, Formatierung, Ereignisbehandlung
-tests/              34 Kontrollfälle mit manuell ermittelten Sollwerten
+tests/              41 Kontrollfälle, davon 7 mit von Hand gerechnetem Sollwert
 ```
 
 Berechnungskern (`src/core/`) und Oberfläche (`src/ui/`) sind strikt getrennt. Der Kern
@@ -67,8 +67,17 @@ entstehen.
 
 ## Kontrollrechnungen
 
-`http://localhost:8765/tests/` aufrufen. Die Seite führt 34 Kontrollfälle aus und zeigt
-je Fall Soll- und Istwert an. Erwartet wird `34/34 bestanden`.
+`http://localhost:8765/tests/` aufrufen. Die Seite führt 41 Kontrollfälle aus und zeigt
+je Fall Soll- und Istwert an. Erwartet wird `41/41 bestanden`.
+
+Sieben Fälle sind mit *Sollwert von Hand* markiert: ihr Erwartungswert ist als feste Zahl
+vorgegeben und der Rechenweg im Quelltext vollständig ausgeschrieben. Die übrigen prüfen
+Struktur- und Verhaltenseigenschaften (Linearität, Monotonie, Grenzen des
+Anrechnungsvolumens, Übergang zum Mindesthebesatz).
+
+Das Prüfszenario in `tests/tests.js` ist bewusst **nicht** aus `STANDARD_SZENARIO`
+abgeleitet. Ein Kontrollfall, dessen Sollwert sich aus den Konstanten des Codes speist,
+kann eine Änderung dieser Konstanten nicht aufdecken.
 
 ## Rechtsstand pflegen
 
@@ -89,6 +98,24 @@ der Tabelle „Rechtsstand je Veranlagungszeitraum" als solche gekennzeichnet.
 > Solidaritätszuschlags (20.350 EUR) sollten vor der Veröffentlichung gegen den
 > Gesetzestext abgeglichen werden.
 
+## Basisszenario
+
+Voreingestellt ist das Basisszenario aus Abschnitt 3.1 der Arbeit:
+
+| Parameter | Wert |
+| --- | --- |
+| Gewinn vor Steuern und Tätigkeitsvergütung | 500.000 EUR |
+| Tätigkeitsvergütung | 100.000 EUR |
+| Entnahme- bzw. Ausschüttungsquote | 50 % |
+| Kalkulationszinssatz | 3 % p.a. |
+| Betrachtungszeitraum | VZ 2026–2032 (7 Perioden) |
+| Gewerbesteuerhebesatz | 400 % |
+
+Damit reproduziert die Startansicht die Zeile 400 % der Ergebnistabelle der Arbeit:
+42,63 % (PersG Regel), 41,84 % (PersG § 34a) und 43,17 % (GmbH bzw. optierende
+Gesellschaft), jeweils als Barwert der Gesamtsteuerbelastung in Prozent des Barwerts des
+Gewinns vor Steuern.
+
 ## Modellannahmen
 
 Die vollständige Annahmenübersicht ist im Tool über die Schaltfläche
@@ -97,9 +124,8 @@ Die vollständige Annahmenübersicht ist im Tool über die Schaltfläche
 - Gesellschafter: eine unbeschränkt steuerpflichtige natürliche Person, keine weiteren
   Einkünfte, keine Kirchensteuer
 - Hinzurechnungen und Kürzungen (§§ 8, 9 GewStG) bleiben außer Betracht
-- Tätigkeitsvergütung in allen Ausprägungen betragsgleich und fremdüblich
-  (Basisszenario 120.000 EUR); der Verzicht auf eine Vergütung dient als
-  Kontrollrechnung
+- Tätigkeitsvergütung in allen Ausprägungen betragsgleich und fremdüblich; der Verzicht
+  auf eine Vergütung dient als Kontrollrechnung
 - Ausschüttungen unterliegen der Abgeltungsteuer; kein Teileinkünfteverfahren, keine
   Günstigerprüfung, kein Sparer-Pauschbetrag
 - In der Schlussperiode vollständige Entnahme bzw. Ausschüttung samt Nachversteuerung

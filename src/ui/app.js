@@ -56,12 +56,16 @@ function leseSzenario() {
   const bisVz = vonVz + dauer - 1;
 
   return {
-    gewinn: Math.max(0, zahl(felder.gewinn, 300000)),
+    gewinn: Math.max(0, zahl(felder.gewinn, STANDARD_SZENARIO.gewinn)),
     verguetung: Math.max(0, zahl(felder.verguetung, STANDARD_SZENARIO.verguetung)),
     thesaurierungsquote:
-      1 - Math.min(1, Math.max(0, zahl(felder.entnahmeZahl, 0) / 100)),
-    hebesatz: Math.max(0, zahl(felder.hebesatzZahl, 400)),
-    kalkulationszins: Math.max(0, zahl(felder.zins, 3) / 100),
+      1 -
+      Math.min(
+        1,
+        Math.max(0, zahl(felder.entnahmeZahl, (1 - STANDARD_SZENARIO.thesaurierungsquote) * 100) / 100)
+      ),
+    hebesatz: Math.max(0, zahl(felder.hebesatzZahl, STANDARD_SZENARIO.hebesatz)),
+    kalkulationszins: Math.max(0, zahl(felder.zins, STANDARD_SZENARIO.kalkulationszins * 100) / 100),
     vonVz,
     bisVz,
     tarifVz: REFERENZ_TARIF_VZ,
@@ -135,22 +139,58 @@ function zeichneSensitivitaet(szenario) {
   });
   legende($('legende-sensitivitaet'), VARIANTEN.map((v) => ({ ...v, label: v.label })));
 
-  const relevant = schnittpunkte.filter((s) => s.hebesatz >= von && s.hebesatz <= bis);
-  const einmalig = [];
+  const name = (k) => VARIANTEN.find((v) => v.key === k).kurz;
+  const identisch = Math.abs(punkte[0].werte.gmbh.barwert - punkte[0].werte.optierend.barwert) < 1;
+
+  // Verlaufen GmbH und optierende Gesellschaft deckungsgleich, waere jeder
+  // Rangwechsel doppelt aufgefuehrt; die Optionspaare entfallen dann.
+  const relevant = schnittpunkte.filter(
+    (s) =>
+      s.hebesatz >= von &&
+      s.hebesatz <= bis &&
+      !(identisch && (s.a === 'optierend' || s.b === 'optierend'))
+  );
+
+  // Alle Schnittstellen je Paar sammeln. Zwei Schnittpunkte bedeuten einen
+  // Vorteilskorridor, nicht einen einzelnen Rangwechsel (Abschnitt 3.3).
+  const paare = new Map();
   for (const s of relevant) {
     const key = `${s.a}|${s.b}`;
-    if (!einmalig.some((e) => e.key === key)) einmalig.push({ key, ...s });
+    if (!paare.has(key)) paare.set(key, { a: s.a, b: s.b, stellen: [] });
+    paare.get(key).stellen.push(s.hebesatz);
   }
-  const name = (k) => VARIANTEN.find((v) => v.key === k).kurz;
-  const deckungsgleich =
-    Math.abs(punkte[0].werte.gmbh.barwert - punkte[0].werte.optierend.barwert) < 1
-      ? ' GmbH und optierende Gesellschaft verlaufen unter den eingestellten Annahmen deckungsgleich; die Optionskurve ist deshalb gestrichelt dargestellt.'
-      : '';
+
+  const wertBei = (key, h) => {
+    const p = punkte.reduce((best, k) =>
+      Math.abs(k.hebesatz - h) < Math.abs(best.hebesatz - h) ? k : best
+    );
+    return p.werte[key][sensMass];
+  };
+
+  const texte = [...paare.values()].map(({ a, b, stellen }) => {
+    stellen.sort((x, y) => x - y);
+    if (stellen.length === 2) {
+      const mitte = (stellen[0] + stellen[1]) / 2;
+      const guenstiger = wertBei(a, mitte) < wertBei(b, mitte) ? a : b;
+      const andere = guenstiger === a ? b : a;
+      return (
+        `<b>${name(guenstiger)}</b> ist gegenüber <b>${name(andere)}</b> nur zwischen rund ` +
+        `${Math.round(stellen[0])} % und ${Math.round(stellen[1])} % günstiger`
+      );
+    }
+    return (
+      `<b>${name(a)} / ${name(b)}</b> bei rund ` +
+      stellen.map((h) => `${Math.round(h)} %`).join(' und ')
+    );
+  });
+
+  const deckungsgleich = identisch
+    ? ' GmbH und optierende Gesellschaft verlaufen unter den eingestellten Annahmen deckungsgleich; die Optionskurve ist deshalb gestrichelt dargestellt.'
+    : '';
+
   $('schnittpunkte').innerHTML =
-    (einmalig.length
-      ? `Rangwechsel im untersuchten Bereich: ${einmalig
-          .map((s) => `<b>${name(s.a)} / ${name(s.b)}</b> bei rund ${Math.round(s.hebesatz)} %`)
-          .join(', ')}. Die senkrechte Linie markiert den eingestellten Hebesatz.`
+    (texte.length
+      ? `Rangwechsel im untersuchten Bereich: ${texte.join('; ')}. Die senkrechte Linie markiert den eingestellten Hebesatz.`
       : 'Im untersuchten Bereich schneiden sich die Belastungskurven nicht; die Rangfolge bleibt vom Hebesatz unberührt.') +
     deckungsgleich;
 }

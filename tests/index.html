@@ -53,26 +53,48 @@
         color: #b91c1c;
         padding-left: 22px;
       }
+      .marke {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 0 5px;
+        font-size: 11px;
+        color: #92400e;
+        background: #fef3c7;
+        border-radius: 3px;
+      }
+      p.erlaeuterung {
+        max-width: 60em;
+        line-height: 1.5;
+        color: #4b5563;
+      }
     </style>
   </head>
   <body>
     <h1>Kontrollrechnungen des Berechnungskerns</h1>
     <div id="summe">läuft …</div>
+    <p class="erlaeuterung" id="erlaeuterung"></p>
     <ul id="liste"></ul>
     <script type="module">
       import { laufeTests } from './tests.js';
-      const { ergebnisse, bestanden, gesamt } = laufeTests();
+      const { ergebnisse, bestanden, gesamt, handgerechnet } = laufeTests();
       const summe = document.getElementById('summe');
       summe.textContent = `${bestanden} von ${gesamt} Kontrollfällen bestanden`;
       summe.className = bestanden === gesamt ? 'ok' : 'fehler';
+      document.getElementById('erlaeuterung').textContent =
+        `Davon ${handgerechnet} Fälle mit fest vorgegebenem, von Hand gerechnetem Sollwert ` +
+        `(im Quelltext als Rechenweg ausgeschrieben). Die übrigen Fälle prüfen Struktur- und ` +
+        `Verhaltenseigenschaften. Das Prüfszenario ist bewusst nicht aus dem Basisszenario ` +
+        `abgeleitet, damit eine Änderung der Voreinstellungen die Sollwerte nicht verschiebt.`;
       document.getElementById('liste').innerHTML = ergebnisse
         .map(
           (r) =>
-            `<li class="${r.ok ? 'ok' : 'fehler'}">${r.name}</li>` +
+            `<li class="${r.ok ? 'ok' : 'fehler'}">${r.name}` +
+            (r.handgerechnet ? '<span class="marke">Sollwert von Hand</span>' : '') +
+            `</li>` +
             (r.ok ? '' : `<li class="meldung">${r.fehler}</li>`)
         )
         .join('');
-      console.log(`TESTERGEBNIS ${bestanden}/${gesamt}`);
+      console.log(`TESTERGEBNIS ${bestanden}/${gesamt} (${handgerechnet} handgerechnet)`);
       ergebnisse.filter((r) => !r.ok).forEach((r) => console.error(`FEHLER: ${r.name} -> ${r.fehler}`));
     </script>
   </body>

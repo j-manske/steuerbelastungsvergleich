@@ -61,15 +61,20 @@ export const STANDARD_OPTIONEN = {
   schlussausschuettung: true,
 };
 
+/**
+ * Basisszenario nach Abschnitt 3.1 der Arbeit. Der Gewinn ist bewusst so
+ * gewaehlt, dass der Gesellschafter in allen Auspraegungen in der oberen
+ * Proportionalzone des Tarifs liegt.
+ */
 export const STANDARD_SZENARIO = {
-  gewinn: 300000,
+  gewinn: 500000,
   /**
    * Fremduebliches Geschaeftsfuehrergehalt, in allen Auspraegungen betragsgleich
-   * (Abschnitt 2.2 der Arbeit). Der vollstaendige Verzicht auf eine Verguetung
-   * dient in Kapitel 3 nur noch als Kontrollrechnung.
+   * (Abschnitt 2.2). Der Verzicht auf eine Verguetung dient als Kontrollrechnung.
    */
-  verguetung: 120000,
-  thesaurierungsquote: 1,
+  verguetung: 100000,
+  /** Entnahme- bzw. Ausschuettungsquote 50 % (Abschnitt 3.1). */
+  thesaurierungsquote: 0.5,
   hebesatz: 400,
   kalkulationszins: 0.03,
   vonVz: 2026,
@@ -170,48 +175,32 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
   const entnahmefaehig = Math.max(0, G - V - gew.steuer);
   const entnahmeFrei = (1 - t) * entnahmefaehig;
 
-  // Zirkularitaet des § 34a Abs. 2 EStG: der beguenstigungsfaehige Gewinn ist
-  // um die zur Zahlung der Gewerbe- und der Thesaurierungssteuer entnommenen
-  // Betraege zu erhoehen, die Thesaurierungssteuer folgt aber erst aus ihm.
-  // Aufloesung durch Fixpunktiteration (Abschnitt 2.4 der Arbeit).
-  let steuerentnahme = 0;
-  let iterationen = 0;
-  let lauf = null;
-  for (let i = 0; i < 50; i++) {
-    iterationen = i + 1;
-    const entnahmen = V + entnahmeFrei + gew.steuer + steuerentnahme;
-    const nichtEntnommenerGewinn = G - entnahmen;
-    const beguenstigungsfaehig = Math.max(0, nichtEntnommenerGewinn + gew.steuer + steuerentnahme);
-    const B = beguenstigungsfaehig; // voller Antrag
-    const regelbesteuert = Math.max(0, G - B);
+  // § 34a Abs. 2 EStG in geschlossener Form.
+  //
+  // Nicht entnommener Gewinn ist der Steuerbilanzgewinn abzueglich des
+  // Entnahmesaldos und zuzueglich der Gewerbesteuer (S. 1). Entnahmen zur
+  // Zahlung der Thesaurierungssteuer und des darauf entfallenden SolZ bleiben
+  // nach S. 2 au§er Ansatz. Bezeichnet E die Steuerentnahme, so gilt
+  //
+  //   B = [G - (V + entnahmeFrei + GewSt + E)] + GewSt + E
+  //     =  G - V - entnahmeFrei
+  //
+  // GewSt und E kuerzen sich heraus. Die geltende Fassung erzeugt damit keine
+  // Zirkularitaet; eine Fixpunktiteration ist entbehrlich.
+  const beguenstigungsfaehig = Math.max(0, G - V - entnahmeFrei);
+  const B = beguenstigungsfaehig; // voller Antrag
+  const regelbesteuert = Math.max(0, G - B);
 
-    const estTariflich = estTarif(regelbesteuert, szenario.tarifVz);
-    const est34a = rs.thesaurierung34a * B;
-    const solz34a = solzPauschal(est34a);
+  const estTariflich = estTarif(regelbesteuert, szenario.tarifVz);
+  const est34a = rs.thesaurierung34a * B;
+  const solz34a = solzPauschal(est34a);
 
-    const hoechstbetrag = szenario.optionen.est34aImHoechstbetrag
-      ? estTariflich + est34a
-      : estTariflich;
-    const erm = ermaessigung35(gew.messbetrag, gew.steuer, hoechstbetrag);
-
-    lauf = {
-      entnahmen,
-      nichtEntnommenerGewinn,
-      beguenstigungsfaehig,
-      B,
-      regelbesteuert,
-      estTariflich,
-      est34a,
-      solz34a,
-      erm,
-    };
-
-    const neu = est34a + solz34a;
-    if (Math.abs(neu - steuerentnahme) < 0.01) break;
-    steuerentnahme = neu;
-  }
-
-  const { B, regelbesteuert, estTariflich, est34a, solz34a, erm } = lauf;
+  // Nach Auffassung der Finanzverwaltung gehen die Steuer auf den beguenstigten
+  // Gewinn und die Nachsteuer in den Ermaessigungshoechstbetrag ein.
+  const hoechstbetrag = szenario.optionen.est34aImHoechstbetrag
+    ? estTariflich + est34a
+    : estTariflich;
+  const erm = ermaessigung35(gew.messbetrag, gew.steuer, hoechstbetrag);
   const estFestgesetzt = Math.max(0, estTariflich + est34a - erm.anrechnung);
   const solz = solzAufEst(estFestgesetzt, solzOpt);
 
@@ -276,7 +265,7 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
       posten('Gesamtbelastung der Periode', gesamt, null, 'summe'),
     ],
     hinweise: [
-      `Fixpunktiteration konvergiert nach ${iterationen} Durchläufen.`,
+      'Begünstigungsfähiger Gewinn geschlossen ermittelt: die nach § 34a Abs. 2 S. 2 EStG außer Ansatz bleibende Steuerentnahme und die Hinzurechnung der Gewerbesteuer heben sich auf.',
       ...(erm.ueberhang > EPS ? [`Anrechnungsüberhang: ${erm.ueberhangUrsache}`] : []),
       ...(schlussNachversteuerung > EPS
         ? ['Schlussperiode: vollständige Entnahme, Nachversteuerung des Restbestands.']

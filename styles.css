@@ -202,6 +202,18 @@ select:focus {
   margin-bottom: 6px;
 }
 
+/* Abschnittsverweis in der Annahmentabelle */
+.kap {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  font-size: 0.68rem;
+  color: var(--gedimmt);
+  background: #f2f4f7;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
 .schnellwahl {
   display: flex;
   flex-wrap: wrap;

@@ -46,14 +46,14 @@
           <div class="feld">
             <label for="gewinn">Gewinn vor Steuern und Tätigkeitsvergütung</label>
             <div class="zahl-eingabe breit">
-              <input id="gewinn" type="number" min="0" step="10000" value="300000" />
+              <input id="gewinn" type="number" min="0" step="10000" value="500000" />
               <span>EUR</span>
             </div>
           </div>
           <div class="feld">
             <label for="verguetung">Tätigkeitsvergütung / Geschäftsführergehalt</label>
             <div class="zahl-eingabe breit">
-              <input id="verguetung" type="number" min="0" step="5000" value="120000" />
+              <input id="verguetung" type="number" min="0" step="5000" value="100000" />
               <span>EUR</span>
             </div>
             <p class="hinweis">
@@ -64,9 +64,9 @@
           <div class="feld">
             <label for="entnahme">Entnahme- bzw. Ausschüttungsquote</label>
             <div class="slider-zeile">
-              <input id="entnahme" type="range" min="0" max="100" step="5" value="0" />
+              <input id="entnahme" type="range" min="0" max="100" step="5" value="50" />
               <div class="zahl-eingabe">
-                <input id="entnahme-zahl" type="number" min="0" max="100" step="5" value="0" />
+                <input id="entnahme-zahl" type="number" min="0" max="100" step="5" value="50" />
                 <span>%</span>
               </div>
             </div>
@@ -234,29 +234,29 @@
           Die Annahmen sind keine Realitätsbeschreibung, sondern eine bewusste Reduktion, die den
           Untersuchungsgegenstand isoliert. Sie wirken über alle Ausprägungen einheitlich;
           Belastungsunterschiede sind damit ausschließlich auf die rechtsformspezifische Systematik
-          und auf die Höhe des Hebesatzes zurückzuführen. Die Übersicht entspricht Tabelle 1 der
-          Arbeit.
+          und auf die Höhe des Hebesatzes zurückzuführen. Die Übersicht entspricht der
+          Annahmentabelle der Arbeit; die Randziffer nennt den begründenden Abschnitt.
         </p>
         <table class="tabelle">
           <thead>
             <tr><th>Parameter</th><th>Annahme</th></tr>
           </thead>
           <tbody>
-            <tr><td>Gesellschafter</td><td>eine unbeschränkt steuerpflichtige natürliche Person, keine weiteren Einkünfte, keine Kirchensteuer</td></tr>
-            <tr><td>Gewinn vor Steuern</td><td>konstant über alle Perioden</td></tr>
-            <tr><td>Hebesatz</td><td>einzige variable Größe; Sensitivität im Bereich 280 % bis 600 %. Der gewogene Bundesdurchschnitt liegt bei rund 400 % und fällt damit nahezu mit der Anrechnungsgrenze des § 35 EStG zusammen.</td></tr>
-            <tr><td>Hinzurechnungen / Kürzungen</td><td>keine; Gewerbeertrag = Gewinn vor Steuern</td></tr>
-            <tr><td>Tätigkeitsvergütung</td><td>betragsgleich in allen Ausprägungen, fremdüblich. Bei der Personengesellschaft Sondervergütung nach § 15 Abs. 1 S. 1 Nr. 2 EStG i.V.m. § 7 GewStG, bei GmbH und optierender Gesellschaft abziehbare Betriebsausgabe. Der vollständige Verzicht auf eine Vergütung dient nur als Kontrollrechnung.</td></tr>
-            <tr><td>Entnahme- bzw. Ausschüttungsquote</td><td>konstant; Bezugsgröße bei der Personengesellschaft der Gewinn vor Einkommensteuer, bei den Kapitalgesellschaften der Jahresüberschuss nach Körperschaft- und Gewerbesteuer</td></tr>
-            <tr><td>Sonderbetriebsvermögen</td><td>nicht vorhanden</td></tr>
-            <tr><td>Anrechnung § 35 EStG</td><td>ein Betrieb, keine Quotelung, kein Vor- oder Rücktrag von Überhängen</td></tr>
-            <tr><td>§ 34a EStG</td><td>Antragsvoraussetzungen des Abs. 1 S. 1 erfüllt (Gewinnanteil über 10 % oder über 10.000 EUR), keine Tatbestände des Abs. 6, voller Antrag</td></tr>
-            <tr><td>Ausschüttungsbesteuerung</td><td>Abgeltungsteuer nach § 32d Abs. 1 EStG; kein Teileinkünfteverfahren, keine Günstigerprüfung, kein Sparer-Pauschbetrag. Das Teileinkünfteverfahren wäre erst unterhalb eines Grenzsteuersatzes von rund 41,7 % vorteilhaft, die Günstigerprüfung erst unterhalb von 25 %.</td></tr>
-            <tr><td>Optierende Gesellschaft</td><td>nicht entnahmefähiges Gesellschafterkonto unterstellt, da das Stehenlassen auf einem entnahmefähigen Konto bereits die Ausschüttungsfiktion des § 1a Abs. 3 S. 5 KStG auslöste; Übergang nach § 1a Abs. 2 KStG und Rückoption nach § 1a Abs. 4 KStG nicht abgebildet</td></tr>
-            <tr><td>Schlussperiode</td><td>vollständige Ausschüttung bzw. Entnahme und Nachversteuerung</td></tr>
-            <tr><td>Rechtsstand</td><td>verabschiedete Satzänderungen periodengerecht; Einkommensteuertarif konstant (VZ 2026)</td></tr>
-            <tr><td>Thesauriertes Vermögen</td><td>keine Verzinsung; Diskontierung allein über den Kalkulationszinssatz</td></tr>
-            <tr><td>Sozialversicherung</td><td>bleibt außer Betracht</td></tr>
+            <tr><td>Gesellschafter</td><td>eine unbeschränkt steuerpflichtige natürliche Person, keine weiteren Einkünfte, keine Kirchensteuer <span class="kap">2.1.1</span></td></tr>
+            <tr><td>Gewinn vor Steuern</td><td>konstant über alle sieben Perioden <span class="kap">2.2</span></td></tr>
+            <tr><td>Hinzurechnungen / Kürzungen</td><td>keine; Gewerbeertrag = Gewinn vor Steuern <span class="kap">2.1.1</span></td></tr>
+            <tr><td>Tätigkeitsvergütung</td><td>betragsgleich in allen Ausprägungen, fremdüblich. Bei der Personengesellschaft Sondervergütung nach § 15 Abs. 1 S. 1 Nr. 2 EStG i.V.m. § 7 GewStG, bei GmbH und optierender Gesellschaft abziehbare Betriebsausgabe <span class="kap">2.2</span></td></tr>
+            <tr><td>Sonderbetriebsvermögen</td><td>nicht vorhanden <span class="kap">2.1.1</span></td></tr>
+            <tr><td>Anrechnung § 35 EStG</td><td>ein Betrieb, keine Quotelung, kein Vor- oder Rücktrag von Überhängen, Thesaurierungs- und Nachsteuer im Höchstbetrag <span class="kap">2.1.1</span></td></tr>
+            <tr><td>§ 34a EStG</td><td>Antragsvoraussetzungen erfüllt (Gewinnanteil über 10 % oder über 10.000 EUR), keine Tatbestände des Abs. 6, Steuern werden zusätzlich zu Vergütung und Entnahmen entnommen <span class="kap">2.1.1</span></td></tr>
+            <tr><td>Ausschüttungsbesteuerung</td><td>Abgeltungsteuer, kein Teileinkünfteverfahren, keine Günstigerprüfung. Das Teileinkünfteverfahren wäre erst unterhalb eines Grenzsteuersatzes von rund 41,7 % vorteilhaft, die Günstigerprüfung erst unterhalb von 25 % <span class="kap">2.1.2</span></td></tr>
+            <tr><td>Optierende Gesellschaft</td><td>nicht entnahmefähiges Gesellschafterkonto; Übergang und Rückoption nicht abgebildet <span class="kap">2.1.3</span></td></tr>
+            <tr><td>Entnahmequote</td><td>PersG: auf Gewinn nach Vergütung und Gewerbesteuer, KapGes: auf Jahresüberschuss. Die dem Gesellschafter zufließenden Beträge sind daher bei gleicher Quote nicht identisch. <span class="kap">2.2</span></td></tr>
+            <tr><td>Thesauriertes Vermögen</td><td>keine Verzinsung <span class="kap">2.2</span></td></tr>
+            <tr><td>Zahlungszeitpunkt</td><td>Steuerzahlung am Periodenende, Diskontierung mit konstantem Zinssatz <span class="kap">2.2</span></td></tr>
+            <tr><td>Schlussperiode</td><td>vollständige Ausschüttung bzw. Entnahme und Nachversteuerung <span class="kap">2.2</span></td></tr>
+            <tr><td>Rechtsstand</td><td>verabschiedete Satzänderungen periodengerecht; Einkommensteuertarif 2026 konstant, Mindesthebesatz 200 % (2026), 280 % (ab 2027) <span class="kap">2.2</span></td></tr>
+            <tr><td>Hebesatz</td><td>einzige variable Größe; Sensitivität im Bereich 280 % bis 600 %. Der gewogene Bundesdurchschnitt liegt bei rund 400 % und fällt damit nahezu mit der Anrechnungsgrenze des § 35 EStG zusammen. <span class="kap">2.3</span></td></tr>
           </tbody>
         </table>
 
@@ -264,10 +264,12 @@
         <p>
           Die Berechnung durchläuft die Veranlagungszeiträume nacheinander. Fortgeschrieben werden
           der nachversteuerungspflichtige Betrag nach § 34a Abs. 3 EStG sowie das thesaurierte
-          Vermögen der Kapitalgesellschaft. Die Ermittlung des begünstigungsfähigen Gewinns nach
-          § 34a Abs. 2 EStG ist zirkulär und wird durch Fixpunktiteration aufgelöst. Erst im
-          Anschluss werden die Zahlungen &ndash; jeweils zum Periodenende &ndash; auf den Beginn des
-          ersten Veranlagungszeitraums diskontiert.
+          Vermögen der Kapitalgesellschaft. Der begünstigungsfähige Gewinn nach § 34a Abs. 2 EStG
+          wird geschlossen ermittelt: Da die Entnahmen zur Zahlung der Thesaurierungssteuer nach
+          Satz 2 außer Ansatz bleiben und der Gewinn nach Satz 1 um die Gewerbesteuer erhöht wird,
+          heben sich beide Größen heraus &ndash; die geltende Fassung erzeugt keine Zirkularität.
+          Erst im Anschluss werden die Zahlungen &ndash; jeweils zum Periodenende &ndash; auf den
+          Beginn des ersten Veranlagungszeitraums diskontiert.
         </p>
 
         <h3>Grenzen</h3>

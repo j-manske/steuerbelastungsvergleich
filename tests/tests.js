@@ -1,7 +1,14 @@
 /**
- * Kontrollfaelle zur Absicherung des Berechnungskerns.
- * Die Sollwerte sind manuell gerechnet; sie decken insbesondere die Grenzen des
- * Anrechnungsvolumens nach § 35 EStG und den Uebergang zum Mindesthebesatz ab.
+ * Kontrollfaelle zur Absicherung des Berechnungskerns (Abschnitt 2.5 der Arbeit).
+ *
+ * Zwei Arten von Faellen:
+ *   H(...)  sieben Faelle mit fest vorgegebenem, von Hand gerechnetem Sollwert.
+ *           Der Rechenweg steht vollstaendig im Kommentar und ist ohne den Code
+ *           nachvollziehbar.
+ *   T(...)  Struktur- und Verhaltenspruefungen (Monotonie, Linearitaet, Grenzen
+ *           des Anrechnungsvolumens nach § 35 EStG, Uebergang zum Mindesthebesatz).
+ *
+ * Das Pruefszenario ist bewusst nicht aus STANDARD_SZENARIO abgeleitet.
  */
 
 import { berechne, STANDARD_SZENARIO } from '../src/core/model.js';
@@ -10,6 +17,8 @@ import { rechtsstand } from '../src/core/rates.js';
 
 const faelle = [];
 const T = (name, fn) => faelle.push({ name, fn });
+/** Kontrollfall mit fest vorgegebenem, von Hand gerechnetem Sollwert. */
+const H = (name, fn) => faelle.push({ name, fn, handgerechnet: true });
 
 function nah(ist, soll, toleranz = 0.01) {
   if (Math.abs(ist - soll) > toleranz) {
@@ -20,8 +29,22 @@ function gleich(ist, soll) {
   if (ist !== soll) throw new Error(`erwartet ${soll}, erhalten ${ist}`);
 }
 
+/**
+ * Pruefszenario. Bewusst vollstaendig ausgeschrieben und gerade NICHT aus
+ * STANDARD_SZENARIO abgeleitet: ein Kontrollfall, dessen Sollwert sich aus den
+ * Konstanten des Codes speist, kann eine Aenderung dieser Konstanten nicht
+ * aufdecken. Aenderungen am Basisszenario duerfen die Kontrollfaelle nicht
+ * stillschweigend verschieben.
+ */
+const PRUEF_OPTIONEN = {
+  solzFreigrenze: true,
+  mindesthebesatzErzwingen: true,
+  est34aImHoechstbetrag: true,
+  ausschuettungsfiktion1a: false,
+  schlussausschuettung: true,
+};
+
 const basis = (ueberschreibungen = {}) => ({
-  ...STANDARD_SZENARIO,
   gewinn: 300000,
   verguetung: 0,
   thesaurierungsquote: 1,
@@ -29,8 +52,101 @@ const basis = (ueberschreibungen = {}) => ({
   kalkulationszins: 0,
   vonVz: 2026,
   bisVz: 2026,
+  tarifVz: 2026,
   ...ueberschreibungen,
-  optionen: { ...STANDARD_SZENARIO.optionen, ...(ueberschreibungen.optionen ?? {}) },
+  optionen: { ...PRUEF_OPTIONEN, ...(ueberschreibungen.optionen ?? {}) },
+});
+
+/* ------------------------------------------------------------------ *
+ * Von Hand gerechnete Sollwerte
+ *
+ * Diese sieben Faelle geben den Sollwert als feste Zahl vor. Die Rechnung ist
+ * im Kommentar vollstaendig ausgeschrieben, sodass sie ohne den Code
+ * nachvollzogen werden kann. Alle Faelle sind einperiodig (VZ 2026) und ohne
+ * Diskontierung, damit die Arithmetik nachpruefbar bleibt.
+ * ------------------------------------------------------------------ */
+
+H('Sollwert 1 - § 32a EStG, obere Proportionalzone: zvE 300.000 EUR -> 115.529 EUR', () => {
+  // 0,45 * 300.000 - 19.470,74 = 115.529,26; Abrundung auf volle EUR (§ 32a Abs. 1 S. 6)
+  nah(estTarif(300000, 2026), 115529, 0.51);
+});
+
+H('Sollwert 2 - § 11 GewStG PersG: G 500.000 EUR, h 400 % -> 66.570 EUR', () => {
+  // 500.000 abgerundet, ./. 24.500 Freibetrag = 475.500
+  // 475.500 * 3,5 % = 16.642,50 Messbetrag; * 400 % = 66.570,00
+  const g = gewerbesteuer(500000, 24500, 400);
+  nah(g.messbetrag, 16642.5);
+  nah(g.steuer, 66570);
+});
+
+H('Sollwert 3 - § 11 GewStG KapGes ohne Freibetrag: Ertrag 400.000 EUR, h 400 % -> 56.000 EUR', () => {
+  // 400.000 * 3,5 % = 14.000 Messbetrag; * 400 % = 56.000,00
+  const g = gewerbesteuer(400000, 0, 400);
+  nah(g.messbetrag, 14000);
+  nah(g.steuer, 56000);
+});
+
+H('Sollwert 4 - GmbH einperiodig, G 500.000 EUR, keine Vergütung, Thesaurierung -> 149.125 EUR', () => {
+  // GewSt  = 500.000 * 3,5 % * 400 %          =  70.000,00
+  // KSt    = 15 % * 500.000                   =  75.000,00
+  // SolZ   = 5,5 % * 75.000                   =   4.125,00
+  //                                            ------------
+  //                                             149.125,00
+  const p = berechne(
+    basis({ gewinn: 500000, optionen: { schlussausschuettung: false } })
+  ).varianten.gmbh.perioden[0];
+  nah(p.komponenten.gewerbesteuer, 70000);
+  nah(p.komponenten.koerperschaftsteuer, 75000);
+  nah(p.komponenten.solz, 4125);
+  nah(p.gesamt, 149125);
+});
+
+H('Sollwert 5 - PersG Regelbesteuerung einperiodig, G 500.000 EUR, h 400 % -> 213.171,75 EUR', () => {
+  // GewSt        = 66.570,00 (Sollwert 2), Messbetrag 16.642,50
+  // zvE          = 500.000,00 (GewSt nicht abziehbar, § 4 Abs. 5b EStG)
+  // ESt tariflich= 0,45 * 500.000 - 19.470,74 = 205.529,26 -> 205.529
+  // § 35 EStG    = min(4 * 16.642,50 ; gezahlte GewSt 66.570) = 66.570,00
+  // ESt festges. = 205.529 - 66.570      = 138.959,00
+  // SolZ         = 5,5 % * 138.959       =   7.642,745
+  //                                       -------------
+  // Gesamt       = 66.570 + 138.959 + 7.642,745 = 213.171,745
+  const p = berechne({ ...basis({ gewinn: 500000 }) }).varianten.persG.perioden[0];
+  nah(p.komponenten.gewerbesteuer, 66570);
+  nah(p.komponenten.einkommensteuer, 138959);
+  nah(p.komponenten.solz, 7642.745);
+  nah(p.gesamt, 213171.745);
+});
+
+H('Sollwert 6 - PersG § 34a einperiodig, volle Thesaurierung, G 500.000 EUR -> 145.357,40 EUR', () => {
+  // GewSt         = 66.570,00
+  // beguenstigt B = 500.000 - 0 Vergütung - 0 Entnahme = 500.000,00
+  // regelbesteuert=       0,00  ->  tarifliche ESt = 0,00
+  // § 34a Abs. 1  = 28,25 % * 500.000          = 141.250,00
+  // Hoechstbetrag = 0 + 141.250                = 141.250,00
+  // § 35 EStG     = min(66.570 ; 66.570 ; 141.250) = 66.570,00
+  // ESt festges.  = 141.250 - 66.570           =  74.680,00
+  // SolZ          = 5,5 % * 74.680             =   4.107,40
+  //                                             ------------
+  // Gesamt        = 66.570 + 74.680 + 4.107,40 = 145.357,40
+  const p = berechne(
+    basis({ gewinn: 500000, optionen: { schlussausschuettung: false } })
+  ).varianten.persG34a.perioden[0];
+  nah(p.komponenten.gewerbesteuer, 66570);
+  nah(p.gesamt, 145357.4);
+});
+
+H('Sollwert 7 - § 34a Abs. 4 EStG, Nachversteuerung in der Schlussperiode -> 237.928,70 EUR', () => {
+  // Laufende Belastung wie Sollwert 6                    = 145.357,40
+  // SolZ auf die Thesaurierungssteuer 5,5 % * 141.250    =   7.768,75
+  // nvB-Zugang = 500.000 - 141.250 - 7.768,75            = 350.981,25
+  // Nachsteuer = 25 % * 350.981,25                       =  87.745,3125
+  // SolZ       = 5,5 % * 87.745,3125                     =   4.825,992
+  //                                                       -------------
+  // Gesamt = 145.357,40 + 87.745,3125 + 4.825,992        = 237.928,705
+  const p = berechne({ ...basis({ gewinn: 500000 }) }).varianten.persG34a.perioden[0];
+  const nv = p.posten.find((x) => x.label === 'Nachversteuerungsbetrag');
+  nah(nv.betrag, 350981.25, 0.02);
+  nah(p.gesamt, 237928.705, 0.02);
 });
 
 /* ---------------- Grundfunktionen ---------------- */
@@ -332,14 +448,15 @@ export function laufeTests() {
   const ergebnisse = faelle.map((f) => {
     try {
       f.fn();
-      return { name: f.name, ok: true };
+      return { name: f.name, ok: true, handgerechnet: !!f.handgerechnet };
     } catch (fehler) {
-      return { name: f.name, ok: false, fehler: fehler.message };
+      return { name: f.name, ok: false, handgerechnet: !!f.handgerechnet, fehler: fehler.message };
     }
   });
   return {
     ergebnisse,
     bestanden: ergebnisse.filter((r) => r.ok).length,
     gesamt: ergebnisse.length,
+    handgerechnet: ergebnisse.filter((r) => r.handgerechnet).length,
   };
 }
