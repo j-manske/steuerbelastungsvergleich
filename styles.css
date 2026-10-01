@@ -275,6 +275,12 @@ select:focus {
   color: var(--gedimmt);
   margin-top: 2px;
 }
+/* Wahlrecht, das durch ein anderes verdraengt wird (§ 32d Abs. 6 EStG bei
+   beantragtem Teileinkuenfteverfahren). */
+.schalter.gesperrt {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 button {
   font: inherit;

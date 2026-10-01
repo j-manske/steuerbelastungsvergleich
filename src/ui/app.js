@@ -27,6 +27,7 @@ const felder = {
   hebesatzZahl: $('hebesatz-zahl'),
   gewinn: $('gewinn'),
   verguetung: $('verguetung'),
+  weitere: $('weitere'),
   // Die Oberflaeche fragt die Entnahme-/Ausschuettungsquote ab (Abschnitt 2.4
   // der Arbeit); der Kern rechnet weiterhin mit der Gegengroesse.
   entnahme: $('entnahme'),
@@ -39,6 +40,8 @@ const felder = {
   optSolz: $('opt-solz'),
   optHoechst: $('opt-hoechst'),
   optFiktion: $('opt-fiktion'),
+  optTev: $('opt-tev'),
+  optGuenstiger: $('opt-guenstiger'),
   optKontrolle: $('opt-kontrolle'),
 };
 
@@ -58,6 +61,9 @@ function leseSzenario() {
   return {
     gewinn: Math.max(0, zahl(felder.gewinn, STANDARD_SZENARIO.gewinn)),
     verguetung: Math.max(0, zahl(felder.verguetung, STANDARD_SZENARIO.verguetung)),
+    // Sockelbetrag: bestimmt nur den Grenzsteuersatz, die auf ihn entfallende
+    // Steuer bleibt ausserhalb des Vergleichsmassstabs.
+    weitereEinkuenfte: Math.max(0, zahl(felder.weitere, STANDARD_SZENARIO.weitereEinkuenfte)),
     thesaurierungsquote:
       1 -
       Math.min(
@@ -75,8 +81,24 @@ function leseSzenario() {
       solzFreigrenze: felder.optSolz.checked,
       est34aImHoechstbetrag: felder.optHoechst.checked,
       ausschuettungsfiktion1a: felder.optFiktion.checked,
+      teileinkuenfte: felder.optTev.checked,
+      // Bei beantragtem Teileinkuenfteverfahren ist der gesonderte Tarif
+      // ausgeschlossen; § 32d Abs. 6 EStG laeuft dann leer.
+      guenstigerpruefung: felder.optGuenstiger.checked && !felder.optTev.checked,
     },
   };
+}
+
+/**
+ * Die Guenstigerpruefung setzt voraus, dass die Ausschuettung ueberhaupt dem
+ * gesonderten Tarif unterliegt. Wird das Teileinkuenfteverfahren beantragt,
+ * ist der Schalter daher gesperrt.
+ */
+function aktualisiereWahlrechte() {
+  const tev = felder.optTev.checked;
+  felder.optGuenstiger.disabled = tev;
+  $('schalter-guenstiger').classList.toggle('gesperrt', tev);
+  $('hinweis-wahlrechte').hidden = !tev;
 }
 
 /* ---------------- Ergebniskarten ---------------- */
@@ -106,10 +128,20 @@ function zeichneVarianten(ergebnis, kontrolle) {
   }
 
   const s = ergebnis.szenario;
+  // Die Wahlrechte des § 32d EStG aendern die Ausschuettungsbesteuerung
+  // grundlegend und werden deshalb im Kopf ausgewiesen.
+  const wahlrecht = s.optionen.teileinkuenfte
+    ? ' · Teileinkünfteverfahren'
+    : s.optionen.guenstigerpruefung
+      ? ' · Günstigerprüfung'
+      : '';
+  // Ein Sockelbetrag verschiebt den Grenzsteuersatz und damit alle Ergebnisse;
+  // er gehoert deshalb sichtbar in den Kopf.
+  const sockel = s.weitereEinkuenfte > 0 ? ` · weitere Einkünfte ${ganz(s.weitereEinkuenfte)} EUR` : '';
   $('zeitraum-badge').textContent =
     `VZ ${s.vonVz}–${s.bisVz} · Hebesatz ${ganz(s.hebesatz)} % · Entnahmequote ${ganz(
       (1 - s.thesaurierungsquote) * 100
-    )} % · i = ${ganz(s.kalkulationszins * 100)} %`;
+    )} % · i = ${ganz(s.kalkulationszins * 100)} %${sockel}${wahlrecht}`;
 }
 
 /* ---------------- Diagramme ---------------- */
@@ -324,10 +356,20 @@ function csvExport() {
   zeilen.push('Parameter;Wert');
   zeilen.push(`Gewinn vor Steuern;${csvZahl(s.gewinn)}`);
   zeilen.push(`Taetigkeitsverguetung;${csvZahl(s.verguetung)}`);
+  zeilen.push(`Weitere Einkuenfte (Sockel);${csvZahl(s.weitereEinkuenfte)}`);
   zeilen.push(`Entnahme-/Ausschuettungsquote;${csvZahl((1 - s.thesaurierungsquote) * 100)}`);
   zeilen.push(`Hebesatz;${csvZahl(s.hebesatz)}`);
   zeilen.push(`Kalkulationszins;${csvZahl(s.kalkulationszins * 100)}`);
   zeilen.push(`Zeitraum;${s.vonVz}-${s.bisVz}`);
+  zeilen.push(
+    `Ausschuettungsbesteuerung;${
+      s.optionen.teileinkuenfte
+        ? 'Teileinkuenfteverfahren (§ 32d Abs. 2 Nr. 3 EStG)'
+        : s.optionen.guenstigerpruefung
+          ? 'Guenstigerpruefung (§ 32d Abs. 6 EStG)'
+          : 'Abgeltungsteuer (§ 32d Abs. 1 EStG)'
+    }`
+  );
   zeilen.push('');
   zeilen.push(['VZ', ...VARIANTEN.map((v) => v.kurz)].join(';'));
   e.varianten.persG.perioden.forEach((p, i) => {
@@ -432,6 +474,7 @@ function setzeZurueck() {
   const s = STANDARD_SZENARIO;
   felder.gewinn.value = s.gewinn;
   felder.verguetung.value = s.verguetung;
+  felder.weitere.value = s.weitereEinkuenfte;
   felder.hebesatz.value = s.hebesatz;
   felder.hebesatzZahl.value = s.hebesatz;
   const entnahme = (1 - s.thesaurierungsquote) * 100;
@@ -447,7 +490,10 @@ function setzeZurueck() {
   felder.optSolz.checked = STANDARD_OPTIONEN.solzFreigrenze;
   felder.optHoechst.checked = STANDARD_OPTIONEN.est34aImHoechstbetrag;
   felder.optFiktion.checked = STANDARD_OPTIONEN.ausschuettungsfiktion1a;
+  felder.optTev.checked = STANDARD_OPTIONEN.teileinkuenfte;
+  felder.optGuenstiger.checked = STANDARD_OPTIONEN.guenstigerpruefung;
   felder.optKontrolle.checked = false;
+  aktualisiereWahlrechte();
   rechne();
 }
 
@@ -456,6 +502,7 @@ koppleSlider(felder.entnahme, felder.entnahmeZahl);
 [
   felder.gewinn,
   felder.verguetung,
+  felder.weitere,
   felder.zins,
   felder.vonVz,
   felder.dauer,
@@ -464,8 +511,13 @@ koppleSlider(felder.entnahme, felder.entnahmeZahl);
   felder.optSolz,
   felder.optHoechst,
   felder.optFiktion,
+  felder.optTev,
+  felder.optGuenstiger,
   felder.optKontrolle,
 ].forEach((f) => f.addEventListener('input', rechne));
+
+felder.optTev.addEventListener('input', aktualisiereWahlrechte);
+aktualisiereWahlrechte();
 
 $('dauer-schnellwahl').addEventListener('click', (ev) => {
   const btn = ev.target.closest('button[data-dauer]');

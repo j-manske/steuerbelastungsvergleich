@@ -57,6 +57,11 @@ export const STANDARD_OPTIONEN = {
   /** Ausschüttungsfiktion des § 1a Abs. 3 S. 5 KStG bei entnahmefaehigem
    *  Gesellschafterkonto - Thesaurierung dann nicht moeglich. */
   ausschuettungsfiktion1a: false,
+  /** Antrag auf Teileinkuenfteverfahren (§ 32d Abs. 2 Nr. 3 EStG) statt des
+   *  gesonderten Tarifs. Standard: nein (Tabelle 2 der Arbeit). */
+  teileinkuenfte: false,
+  /** Guenstigerpruefung nach § 32d Abs. 6 EStG. Standard: nein. */
+  guenstigerpruefung: false,
   /** Vollstaendige Entnahme bzw. Ausschüttung in der Schlussperiode. */
   schlussausschuettung: true,
 };
@@ -73,6 +78,11 @@ export const STANDARD_SZENARIO = {
    * (Abschnitt 2.2). Der Verzicht auf eine Verguetung dient als Kontrollrechnung.
    */
   verguetung: 100000,
+  /**
+   * Weitere tarifliche Einkuenfte des Gesellschafters (Sockelbetrag).
+   * Voreinstellung 0 nach Tabelle 2 der Arbeit: keine weiteren Einkuenfte.
+   */
+  weitereEinkuenfte: 0,
   /** Entnahme- bzw. Ausschuettungsquote 50 % (Abschnitt 3.1). */
   thesaurierungsquote: 0.5,
   hebesatz: 400,
@@ -87,6 +97,43 @@ const EPS = 1e-6;
 
 function posten(label, betrag, norm, ebene) {
   return { label, betrag, norm, ebene };
+}
+
+/* ------------------------------------------------------------------ *
+ * Weitere Einkuenfte des Gesellschafters (Sockelmodell)
+ *
+ * Weitere tarifliche Einkuenfte W wirken im Modell als Sockel: sie verbrauchen
+ * die unteren Tarifzonen und heben damit den Grenzsteuersatz, mit dem das
+ * Betriebsergebnis belastet wird. Die auf W selbst entfallende Steuer bleibt
+ * aus dem Vergleich heraus, denn verglichen werden soll allein die Belastung
+ * des Gewinns. Zugerechnet wird deshalb stets die Differenz
+ *
+ *     ESt(W + X) - ESt(W)
+ *
+ * und ebenso beim Solidaritaetszuschlag. Fuer W = 0 faellt das exakt auf die
+ * bisherige Rechnung zurueck; die Voreinstellung bleibt unveraendert.
+ *
+ * Der Sockel wirkt nur auf tariflich besteuerte Groessen. Der gesonderte Tarif
+ * des § 32d Abs. 1 EStG, der Sondertarif des § 34a Abs. 1 EStG und die
+ * Nachversteuerung nach § 34a Abs. 4 EStG bleiben unberuehrt.
+ * ------------------------------------------------------------------ */
+
+function sockel(szenario) {
+  return Math.max(0, szenario.weitereEinkuenfte ?? 0);
+}
+
+/**
+ * Ermaessigungshoechstbetrag nach § 35 Abs. 1 S. 5 EStG.
+ *
+ * Die Anrechnung ist auf den Anteil der gewerblichen Einkuenfte an der Summe
+ * der Einkuenfte begrenzt. Ohne weitere Einkuenfte betraegt der Quotient 1,
+ * sodass der gesamte Betrag zur Verfuegung steht.
+ */
+function hoechstbetrag35(steuerBasis, gewerblicheEinkuenfte, szenario) {
+  const W = sockel(szenario);
+  const summeEinkuenfte = gewerblicheEinkuenfte + W;
+  const anteil = summeEinkuenfte > 0 ? gewerblicheEinkuenfte / summeEinkuenfte : 0;
+  return { betrag: steuerBasis * anteil, anteil };
 }
 
 function hebesatzFuer(vz, szenario) {
@@ -113,11 +160,23 @@ function periodePersG(vz, szenario, state, istSchluss) {
   // Transparenzprinzip: der gesamte Gewinn einschliesslich der Sondervergütung
   // (§ 15 Abs. 1 S. 1 Nr. 2 EStG) ist gewerbliche Einkunft des Gesellschafters.
   // Die Gewerbesteuer ist nach § 4 Abs. 5b EStG nicht abziehbar.
-  const zvE = G;
-  const estTariflich = estTarif(zvE, szenario.tarifVz);
-  const erm = ermaessigung35(gew.messbetrag, gew.steuer, estTariflich);
-  const estFestgesetzt = Math.max(0, estTariflich - erm.anrechnung);
-  const solz = solzAufEst(estFestgesetzt, solzOpt);
+  const W = sockel(szenario);
+  const zvE = W + G;
+  const estSockel = estTarif(W, szenario.tarifVz);
+  const estGesamt = estTarif(zvE, szenario.tarifVz);
+  const estTariflich = estGesamt - estSockel;
+
+  const hb = hoechstbetrag35(estGesamt, G, szenario);
+  const erm = ermaessigung35(gew.messbetrag, gew.steuer, hb.betrag);
+
+  // Die Quotelung des § 35 Abs. 1 S. 5 EStG stellt sicher, dass die Anrechnung
+  // die auf den Gewinn entfallende Steuer nie uebersteigt: wegen der Progression
+  // ist ESt(W) <= ESt(W+G) * W/(W+G), also hb <= estGesamt - estSockel.
+  const estFestgesetztGesamt = Math.max(0, estGesamt - erm.anrechnung);
+  const solzGesamt = solzAufEst(estFestgesetztGesamt, solzOpt);
+
+  const estFestgesetzt = estFestgesetztGesamt - estSockel;
+  const solz = solzGesamt - solzAufEst(estSockel, solzOpt);
 
   const gesamt = gew.steuer + estFestgesetzt + solz;
 
@@ -140,6 +199,9 @@ function periodePersG(vz, szenario, state, istSchluss) {
       posten('./. Freibetrag', -gew.freibetrag, '§ 11 Abs. 1 S. 3 Nr. 1 GewStG', 'gesellschaft'),
       posten('Steuermessbetrag (3,5 %)', gew.messbetrag, '§ 11 Abs. 2 GewStG', 'gesellschaft'),
       posten(`Gewerbesteuer (Hebesatz ${hs.hebesatz} %)`, gew.steuer, '§ 16 GewStG', 'gesellschaft'),
+      ...(W > EPS
+        ? [posten('weitere Einkünfte (Sockel)', W, '§ 2 Abs. 3 EStG', 'gesellschafter')]
+        : []),
       posten('zu versteuerndes Einkommen', zvE, '§ 2 Abs. 5 EStG', 'gesellschafter'),
       posten('tarifliche Einkommensteuer', estTariflich, '§ 32a EStG', 'gesellschafter'),
       posten('Anrechnungsvolumen (4 × Messbetrag)', erm.anrechnungsvolumen, '§ 35 Abs. 1 EStG', 'gesellschafter'),
@@ -150,7 +212,17 @@ function periodePersG(vz, szenario, state, istSchluss) {
       posten('Solidaritätszuschlag', solz, '§ 4 SolZG', 'gesellschafter'),
       posten('Gesamtbelastung der Periode', gesamt, null, 'summe'),
     ],
-    hinweise: erm.ueberhang > EPS ? [`Anrechnungsüberhang: ${erm.ueberhangUrsache}`] : [],
+    hinweise: [
+      ...(W > EPS
+        ? [
+            'Weitere Einkünfte als Sockel: ausgewiesen ist die Steuer, die durch das Hinzutreten ' +
+              'des Gewinns entsteht. Der Ermäßigungshöchstbetrag des § 35 EStG ist nach ' +
+              `§ 35 Abs. 1 S. 5 EStG auf ${(hb.anteil * 100).toFixed(1).replace('.', ',')} % ` +
+              'gekürzt (Anteil der gewerblichen Einkünfte an der Summe der Einkünfte).',
+          ]
+        : []),
+      ...(erm.ueberhang > EPS ? [`Anrechnungsüberhang: ${erm.ueberhangUrsache}`] : []),
+    ],
     zustand: { ...state },
   };
 }
@@ -191,18 +263,27 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
   const B = beguenstigungsfaehig; // voller Antrag
   const regelbesteuert = Math.max(0, G - B);
 
-  const estTariflich = estTarif(regelbesteuert, szenario.tarifVz);
+  // Der regelbesteuerte Gewinnanteil tritt neben die weiteren Einkuenfte; der
+  // Sondertarif des § 34a Abs. 1 EStG bleibt davon unberuehrt.
+  const W = sockel(szenario);
+  const estSockel = estTarif(W, szenario.tarifVz);
+  const estGesamtTariflich = estTarif(W + regelbesteuert, szenario.tarifVz);
+  const estTariflich = estGesamtTariflich - estSockel;
   const est34a = rs.thesaurierung34a * B;
   const solz34a = solzPauschal(est34a);
 
   // Nach Auffassung der Finanzverwaltung gehen die Steuer auf den beguenstigten
   // Gewinn und die Nachsteuer in den Ermaessigungshoechstbetrag ein.
-  const hoechstbetrag = szenario.optionen.est34aImHoechstbetrag
-    ? estTariflich + est34a
-    : estTariflich;
-  const erm = ermaessigung35(gew.messbetrag, gew.steuer, hoechstbetrag);
-  const estFestgesetzt = Math.max(0, estTariflich + est34a - erm.anrechnung);
-  const solz = solzAufEst(estFestgesetzt, solzOpt);
+  const hbBasis = szenario.optionen.est34aImHoechstbetrag
+    ? estGesamtTariflich + est34a
+    : estGesamtTariflich;
+  const hb = hoechstbetrag35(hbBasis, G, szenario);
+  const erm = ermaessigung35(gew.messbetrag, gew.steuer, hb.betrag);
+
+  const estFestgesetztGesamt = Math.max(0, estGesamtTariflich + est34a - erm.anrechnung);
+  const solzGesamt = solzAufEst(estFestgesetztGesamt, solzOpt);
+  const estFestgesetzt = estFestgesetztGesamt - estSockel;
+  const solz = solzGesamt - solzAufEst(estSockel, solzOpt);
 
   // Nachversteuerung (§ 34a Abs. 4 EStG): laufender Entnahmeueberhang gegen den
   // zum Ende des Vorjahres festgestellten nachversteuerungspflichtigen Betrag.
@@ -266,6 +347,15 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
     ],
     hinweise: [
       'Begünstigungsfähiger Gewinn geschlossen ermittelt: die nach § 34a Abs. 2 S. 2 EStG außer Ansatz bleibende Steuerentnahme und die Hinzurechnung der Gewerbesteuer heben sich auf.',
+      ...(W > EPS
+        ? [
+            'Weitere Einkünfte als Sockel: sie heben den Tarif auf dem regelbesteuerten ' +
+              'Gewinnanteil, lassen den Sondertarif des § 34a Abs. 1 EStG aber unberührt. ' +
+              `Ermäßigungshöchstbetrag nach § 35 Abs. 1 S. 5 EStG auf ${(hb.anteil * 100)
+                .toFixed(1)
+                .replace('.', ',')} % gekürzt.`,
+          ]
+        : []),
       ...(erm.ueberhang > EPS ? [`Anrechnungsüberhang: ${erm.ueberhangUrsache}`] : []),
       ...(schlussNachversteuerung > EPS
         ? ['Schlussperiode: vollständige Entnahme, Nachversteuerung des Restbestands.']
@@ -278,6 +368,142 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
 /* ------------------------------------------------------------------ *
  * GmbH und optierende Gesellschaft
  * ------------------------------------------------------------------ */
+
+/**
+ * Besteuerung von Gehalt und Ausschuettung beim Gesellschafter.
+ *
+ * Grundfall ist der gesonderte Tarif des § 32d Abs. 1 EStG: 25 % zzgl. SolZ,
+ * abgeltend erhoben und vom uebrigen zvE isoliert. Daneben bildet das Modell
+ * die beiden Wahlrechte ab, die diesen Tarif verdraengen:
+ *
+ *   § 32d Abs. 2 Nr. 3 EStG  Teileinkuenfteverfahren. Auf Antrag gehen 60 % der
+ *                            Ausschuettung in das zvE ein (§ 3 Nr. 40 Buchst. d
+ *                            EStG), 40 % bleiben steuerfrei. Voraussetzung ist
+ *                            eine Beteiligung von mindestens 25 % oder von
+ *                            mindestens 1 % bei beruflicher Taetigkeit fuer die
+ *                            Gesellschaft; beides ist unter den Modellannahmen
+ *                            erfuellt (Alleingesellschafter-Geschaeftsfuehrer).
+ *   § 32d Abs. 6 EStG        Guenstigerpruefung. Die Kapitalertraege werden in
+ *                            voller Hoehe dem zvE hinzugerechnet, wenn das zu
+ *                            einer niedrigeren Steuer fuehrt; andernfalls
+ *                            bleibt es beim gesonderten Tarif.
+ *
+ * Beide verlagern die Besteuerung in die Veranlagung. Der SolZ folgt dann
+ * § 4 SolZG mit Freigrenze und Milderungszone statt der pauschalen Erhebung
+ * auf die Kapitalertragsteuer.
+ *
+ * Das Teileinkuenfteverfahren hat Vorrang: § 32d Abs. 6 EStG erfasst nur
+ * Kapitalertraege, die dem gesonderten Tarif des Abs. 1 unterliegen.
+ */
+function gesellschaftersteuer(gehalt, ausschuettung, szenario, solzOpt) {
+  const tarifVz = szenario.tarifVz;
+  const V = Math.max(0, gehalt);
+  const A = Math.max(0, ausschuettung);
+
+  // Weitere Einkuenfte als Sockel: ihre eigene Steuer bleibt aussen vor.
+  const W = sockel(szenario);
+  const estSockel = estTarif(W, tarifVz);
+  const solzSockel = solzAufEst(estSockel, solzOpt);
+
+  const estGehalt = estTarif(W + V, tarifVz) - estSockel;
+  const solzGehalt = solzAufEst(estTarif(W + V, tarifVz), solzOpt) - solzSockel;
+
+  // Grundfall: gesonderter Tarif.
+  const kapEst = KONSTANTEN.abgeltungsteuerSatz * A;
+  const solzKap = solzPauschal(kapEst);
+  const abgeltung = {
+    regime: 'abgeltung',
+    est: estGehalt,
+    abgeltungsteuer: kapEst,
+    solz: solzGehalt + solzKap,
+    summe: estGehalt + solzGehalt + kapEst + solzKap,
+    posten: [
+      ...(W > EPS ? [posten('weitere Einkünfte (Sockel)', W, '§ 2 Abs. 3 EStG', 'gesellschafter')] : []),
+      posten('zu versteuerndes Einkommen (ohne Ausschüttung)', W + V, '§ 2 Abs. 5 EStG', 'gesellschafter'),
+      posten('Einkommensteuer auf Gehalt', estGehalt, '§ 19, § 32a EStG', 'gesellschafter'),
+      posten('SolZ auf Gehalt', solzGehalt, '§ 4 SolZG', 'gesellschafter'),
+      posten('Abgeltungsteuer (25 %)', kapEst, '§ 32d Abs. 1 EStG', 'gesellschafter'),
+      posten('SolZ auf Abgeltungsteuer', solzKap, '§ 4 SolZG', 'gesellschafter'),
+    ],
+    hinweise: [],
+  };
+
+  // Veranlagung der Ausschuettung zum Tarif, wahlweise nur zu 60 %.
+  const veranlagt = (anteil, norm) => {
+    const steuerpflichtig = anteil * A;
+    const steuerfrei = A - steuerpflichtig;
+    const zvE = W + V + steuerpflichtig;
+    const estGesamt = estTarif(zvE, tarifVz);
+    const solzGesamt = solzAufEst(estGesamt, solzOpt);
+    const est = estGesamt - estSockel;
+    const solz = solzGesamt - solzSockel;
+    return {
+      est,
+      abgeltungsteuer: 0,
+      solz,
+      summe: est + solz,
+      posten: [
+        ...(W > EPS ? [posten('weitere Einkünfte (Sockel)', W, '§ 2 Abs. 3 EStG', 'gesellschafter')] : []),
+        posten('Arbeitslohn', V, '§ 19 EStG', 'gesellschafter'),
+        posten('Einkünfte aus Kapitalvermögen', A, '§ 20 Abs. 1 Nr. 1 EStG', 'gesellschafter'),
+        ...(steuerfrei > EPS
+          ? [posten('./. steuerfreier Teil (40 %)', -steuerfrei, '§ 3 Nr. 40 Buchst. d EStG', 'gesellschafter')]
+          : []),
+        posten('zu versteuerndes Einkommen', zvE, '§ 2 Abs. 5 EStG', 'gesellschafter'),
+        posten('tarifliche Einkommensteuer', est, norm, 'gesellschafter'),
+        posten('Solidaritätszuschlag', solz, '§ 4 SolZG', 'gesellschafter'),
+      ],
+    };
+  };
+
+  if (szenario.optionen.teileinkuenfte) {
+    const tev = veranlagt(KONSTANTEN.teileinkuenfteAnteil, '§ 32a EStG');
+    const differenz = tev.summe - abgeltung.summe;
+    return {
+      ...tev,
+      regime: 'teileinkuenfte',
+      vergleichAbgeltung: abgeltung.summe,
+      hinweise: [
+        'Teileinkünfteverfahren beantragt (§ 32d Abs. 2 Nr. 3 EStG): 40 % der Ausschüttung ' +
+          'bleiben nach § 3 Nr. 40 Buchst. d EStG steuerfrei, der Rest unterliegt dem Tarif. ' +
+          'Der gesonderte Tarif des § 32d Abs. 1 EStG ist damit ausgeschlossen.' +
+          (Math.abs(differenz) > 1
+            ? ` Gegenüber der Abgeltungsteuer ${differenz > 0 ? 'höher' : 'niedriger'} um ` +
+              `${Math.abs(differenz).toFixed(0)} EUR.`
+            : ''),
+      ],
+    };
+  }
+
+  if (szenario.optionen.guenstigerpruefung) {
+    // § 32d Abs. 6 EStG: Einbeziehung in voller Hoehe, aber nur, wenn guenstiger.
+    const tarif = veranlagt(1, '§ 32a EStG');
+    if (tarif.summe < abgeltung.summe - EPS) {
+      return {
+        ...tarif,
+        regime: 'guenstiger-tarif',
+        vergleichAbgeltung: abgeltung.summe,
+        hinweise: [
+          'Günstigerprüfung (§ 32d Abs. 6 EStG) fällt zugunsten des Tarifs aus: Einbeziehung ' +
+            `in das zvE spart ${(abgeltung.summe - tarif.summe).toFixed(0)} EUR gegenüber dem ` +
+            'gesonderten Tarif.',
+        ],
+      };
+    }
+    return {
+      ...abgeltung,
+      regime: 'guenstiger-abgeltung',
+      vergleichTarif: tarif.summe,
+      hinweise: [
+        'Günstigerprüfung (§ 32d Abs. 6 EStG) durchgeführt, bleibt ohne Wirkung: die Veranlagung ' +
+          `zum Tarif ergäbe ${(tarif.summe - abgeltung.summe).toFixed(0)} EUR mehr. Es bleibt beim ` +
+          'gesonderten Tarif des § 32d Abs. 1 EStG.',
+      ],
+    };
+  }
+
+  return abgeltung;
+}
 
 function periodeKapGes(vz, szenario, state, istSchluss, variante) {
   const G = szenario.gewinn;
@@ -309,13 +535,10 @@ function periodeKapGes(vz, szenario, state, istSchluss, variante) {
   const thesaurierung = Math.max(0, jahresueberschuss) - Math.min(ausschuettung, Math.max(0, jahresueberschuss));
   const bestandNeu = istSchluss && szenario.optionen.schlussausschuettung ? 0 : state.bestand + thesaurierung;
 
-  // Gesellschafterebene
-  const estGehalt = estTarif(V, szenario.tarifVz);
-  const solzGehalt = solzAufEst(estGehalt, solzOpt);
-  const kapEst = KONSTANTEN.abgeltungsteuerSatz * ausschuettung;
-  const solzKap = solzPauschal(kapEst);
+  // Gesellschafterebene: gesonderter Tarif oder eines der beiden Wahlrechte.
+  const gs = gesellschaftersteuer(V, ausschuettung, szenario, solzOpt);
 
-  const gesamt = gew.steuer + kst + solzKst + estGehalt + solzGehalt + kapEst + solzKap;
+  const gesamt = gew.steuer + kst + solzKst + gs.summe;
 
   return {
     vz,
@@ -324,9 +547,9 @@ function periodeKapGes(vz, szenario, state, istSchluss, variante) {
     komponenten: {
       gewerbesteuer: gew.steuer,
       koerperschaftsteuer: kst,
-      einkommensteuer: estGehalt,
-      abgeltungsteuer: kapEst,
-      solz: solzKst + solzGehalt + solzKap,
+      einkommensteuer: gs.est,
+      abgeltungsteuer: gs.abgeltungsteuer,
+      solz: solzKst + gs.solz,
     },
     posten: [
       posten('Gewinn vor Steuern und Vergütung', G, null, 'nachrichtlich'),
@@ -350,10 +573,7 @@ function periodeKapGes(vz, szenario, state, istSchluss, variante) {
       posten('Thesaurierung', thesaurierung, null, 'gesellschaft'),
       posten('Ausschüttung', ausschuettung, istOption ? '§ 1a Abs. 3 S. 5 KStG' : '§ 20 Abs. 1 Nr. 1 EStG', 'gesellschaft'),
       posten('thesauriertes Vermögen (Endbestand)', bestandNeu, null, 'nachrichtlich'),
-      posten('Einkommensteuer auf Gehalt', estGehalt, '§ 19, § 32a EStG', 'gesellschafter'),
-      posten('SolZ auf Gehalt', solzGehalt, '§ 4 SolZG', 'gesellschafter'),
-      posten('Abgeltungsteuer (25 %)', kapEst, '§ 32d Abs. 1 EStG', 'gesellschafter'),
-      posten('SolZ auf Abgeltungsteuer', solzKap, '§ 4 SolZG', 'gesellschafter'),
+      ...gs.posten,
       posten('Gesamtbelastung der Periode', gesamt, null, 'summe'),
     ],
     hinweise: [
@@ -363,6 +583,7 @@ function periodeKapGes(vz, szenario, state, istSchluss, variante) {
       ...(istSchluss && szenario.optionen.schlussausschuettung
         ? ['Schlussperiode: Ausschüttung des gesamten thesaurierten Vermögens.']
         : []),
+      ...gs.hinweise,
     ],
     zustand: { bestand: bestandNeu },
   };

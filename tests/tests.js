@@ -2,7 +2,7 @@
  * Kontrollfaelle zur Absicherung des Berechnungskerns (Abschnitt 2.5 der Arbeit).
  *
  * Zwei Arten von Faellen:
- *   H(...)  sieben Faelle mit fest vorgegebenem, von Hand gerechnetem Sollwert.
+ *   H(...)  neun Faelle mit fest vorgegebenem, von Hand gerechnetem Sollwert.
  *           Der Rechenweg steht vollstaendig im Kommentar und ist ohne den Code
  *           nachvollziehbar.
  *   T(...)  Struktur- und Verhaltenspruefungen (Monotonie, Linearitaet, Grenzen
@@ -41,12 +41,15 @@ const PRUEF_OPTIONEN = {
   mindesthebesatzErzwingen: true,
   est34aImHoechstbetrag: true,
   ausschuettungsfiktion1a: false,
+  teileinkuenfte: false,
+  guenstigerpruefung: false,
   schlussausschuettung: true,
 };
 
 const basis = (ueberschreibungen = {}) => ({
   gewinn: 300000,
   verguetung: 0,
+  weitereEinkuenfte: 0,
   thesaurierungsquote: 1,
   hebesatz: 400,
   kalkulationszins: 0,
@@ -60,7 +63,7 @@ const basis = (ueberschreibungen = {}) => ({
 /* ------------------------------------------------------------------ *
  * Von Hand gerechnete Sollwerte
  *
- * Diese sieben Faelle geben den Sollwert als feste Zahl vor. Die Rechnung ist
+ * Diese neun Faelle geben den Sollwert als feste Zahl vor. Die Rechnung ist
  * im Kommentar vollstaendig ausgeschrieben, sodass sie ohne den Code
  * nachvollzogen werden kann. Alle Faelle sind einperiodig (VZ 2026) und ohne
  * Diskontierung, damit die Arithmetik nachpruefbar bleibt.
@@ -147,6 +150,72 @@ H('Sollwert 7 - § 34a Abs. 4 EStG, Nachversteuerung in der Schlussperiode -> 23
   const nv = p.posten.find((x) => x.label === 'Nachversteuerungsbetrag');
   nah(nv.betrag, 350981.25, 0.02);
   nah(p.gesamt, 237928.705, 0.02);
+});
+
+H('Sollwert 8 - Teileinkünfteverfahren, GmbH einperiodig, G 300.000 EUR -> 133.696,38 EUR', () => {
+  // Gesellschaftsebene (keine Vergütung, h 400 %):
+  //   GewSt  = 300.000 * 3,5 % * 400 %                       =  42.000,00
+  //   KSt    = 15 % * 300.000                                =  45.000,00
+  //   SolZ   = 5,5 % * 45.000                                =   2.475,00
+  //   JUe    = 300.000 - 42.000 - 45.000 - 2.475             = 210.525,00
+  // Schlussperiode: vollstaendige Ausschuettung von 210.525,00
+  //
+  // Gesellschafterebene mit § 32d Abs. 2 Nr. 3 EStG:
+  //   steuerpflichtig 60 %   = 0,6 * 210.525                 = 126.315,00
+  //   (40 % = 84.210,00 steuerfrei, § 3 Nr. 40 Buchst. d EStG)
+  //   zvE = 126.315 liegt in der oberen Proportionalzone ab 69.879:
+  //   ESt = 0,42 * 126.315 - 11.135,63 = 41.916,67 -> 41.916  (§ 32a Abs. 1 S. 6)
+  //   SolZ: 41.916 > Freigrenze 20.350, Milderungszone
+  //         min( 5,5 % * 41.916 ; 11,9 % * (41.916 - 20.350) )
+  //       = min( 2.305,38 ; 2.566,354 )                      =   2.305,38
+  //                                                           ------------
+  //   Gesamt = 42.000 + 45.000 + 2.475 + 41.916 + 2.305,38   = 133.696,38
+  const p = berechne(basis({ optionen: { teileinkuenfte: true } })).varianten.gmbh.perioden[0];
+  const frei = p.posten.find((x) => x.label === './. steuerfreier Teil (40 %)');
+  nah(frei.betrag, -84210);
+  nah(p.komponenten.einkommensteuer, 41916);
+  nah(p.komponenten.abgeltungsteuer, 0);
+  nah(p.gesamt, 133696.38);
+});
+
+H('Sollwert 9 - Sockelbetrag, PersG Regel, G 500.000 EUR, W 100.000 EUR -> 228.531,58 EUR', () => {
+  // Weitere Einkuenfte wirken als Sockel: sie heben den Grenzsteuersatz, die auf
+  // sie selbst entfallende Steuer wird aber herausgerechnet. Ausgewiesen ist
+  //   ESt(W + G) - ESt(W)  bzw.  SolZ(W + G) - SolZ(W).
+  //
+  // GewSt wie Sollwert 2                                   =  66.570,00
+  //   Messbetrag                                           =  16.642,50
+  //
+  // ESt(W)     = 0,42 * 100.000 - 11.135,63 = 30.864,37 ->  30.864
+  // ESt(W + G) = 0,45 * 600.000 - 19.470,74 = 250.529,26 -> 250.529
+  // tarifliche ESt des Gewinns = 250.529 - 30.864         = 219.665,00
+  //
+  // § 35 Abs. 1 S. 5 EStG: Hoechstbetrag nur anteilig
+  //   Anteil = 500.000 / 600.000 = 83,33 %
+  //   Hoechstbetrag = 250.529 * 5/6                       = 208.774,17
+  //   Anrechnung = min(4 * 16.642,50 ; 66.570 ; 208.774,17) = 66.570,00
+  //
+  // ESt festgesetzt (gesamt) = 250.529 - 66.570           = 183.959,00
+  //   davon Sockel                                         =  30.864,00
+  //   ausgewiesen                                          = 153.095,00
+  // SolZ (gesamt) = min(5,5 % * 183.959 ; 11,9 % * 163.609)
+  //               = min(10.117,745 ; 19.469,471)          =  10.117,745
+  // SolZ (Sockel) = min(5,5 % * 30.864 ; 11,9 % * 10.514)
+  //               = min(1.697,52 ; 1.251,166)             =   1.251,166
+  //   ausgewiesen                                          =   8.866,579
+  //                                                         -------------
+  // Gesamt = 66.570 + 153.095 + 8.866,579                 = 228.531,579
+  const p = berechne(
+    basis({ gewinn: 500000, weitereEinkuenfte: 100000 })
+  ).varianten.persG.perioden[0];
+  nah(p.komponenten.gewerbesteuer, 66570);
+  nah(p.posten.find((x) => x.label === 'weitere Einkünfte (Sockel)').betrag, 100000);
+  nah(p.posten.find((x) => x.label === 'zu versteuerndes Einkommen').betrag, 600000);
+  nah(p.posten.find((x) => x.label === 'tarifliche Einkommensteuer').betrag, 219665);
+  nah(p.posten.find((x) => x.label === 'Ermäßigungshöchstbetrag').betrag, 208774.1667);
+  nah(p.komponenten.einkommensteuer, 153095);
+  nah(p.komponenten.solz, 8866.579);
+  nah(p.gesamt, 228531.579);
 });
 
 /* ---------------- Grundfunktionen ---------------- */
@@ -363,6 +432,226 @@ T('Ausschüttungsfiktion § 1a Abs. 3 S. 5 KStG hebt den Stundungsvorteil auf', 
   if (!(mit.varianten.optierend.barwert > ohne.varianten.optierend.barwert + 1)) {
     throw new Error('Fiktion fuehrt nicht zu hoeherem Barwert');
   }
+});
+
+/* ---------------- Wahlrechte des § 32d EStG ---------------- */
+
+T('Ausschüttungsbesteuerung: Grundfall ist der gesonderte Tarif', () => {
+  // Tabelle 2 der Arbeit: weder Teileinkuenfteverfahren noch Guenstigerpruefung.
+  gleich(STANDARD_SZENARIO.optionen.teileinkuenfte, false);
+  gleich(STANDARD_SZENARIO.optionen.guenstigerpruefung, false);
+  const p = berechne(basis()).varianten.gmbh.perioden[0];
+  if (!(p.komponenten.abgeltungsteuer > 0)) throw new Error('keine Abgeltungsteuer im Grundfall');
+});
+
+T('§ 32d Abs. 2 Nr. 3 EStG: 40 % der Ausschüttung bleiben steuerfrei', () => {
+  const p = berechne(basis({ optionen: { teileinkuenfte: true } })).varianten.gmbh.perioden[0];
+  const a = p.posten.find((x) => x.label === 'Ausschüttung').betrag;
+  const frei = -p.posten.find((x) => x.label === './. steuerfreier Teil (40 %)').betrag;
+  const zvE = p.posten.find((x) => x.label === 'zu versteuerndes Einkommen').betrag;
+  nah(frei, 0.4 * a, 0.02);
+  nah(zvE, 0.6 * a, 0.02);
+  // Der gesonderte Tarif ist ausgeschlossen (§ 32d Abs. 2 Nr. 3 S. 1 EStG).
+  nah(p.komponenten.abgeltungsteuer, 0);
+});
+
+T('Teileinkünfteverfahren ist im Spitzensteuersatz nachteilig', () => {
+  // 60 % * 42 % = 25,2 % > 25 %. Bei einem Gehalt von 150.000 EUR liegt bereits
+  // der erste Euro der Ausschuettung in der oberen Proportionalzone.
+  const s = basis({ gewinn: 600000, verguetung: 150000 });
+  const ohne = berechne(s).varianten.gmbh.barwert;
+  const mit = berechne({ ...s, optionen: { ...s.optionen, teileinkuenfte: true } }).varianten.gmbh
+    .barwert;
+  if (!(mit > ohne + 1)) throw new Error('TEV muesste im Spitzensteuersatz teurer sein');
+});
+
+T('Teileinkünfteverfahren ist bei niedrigem Grenzsteuersatz vorteilhaft', () => {
+  const s = basis({ gewinn: 60000 });
+  const ohne = berechne(s).varianten.gmbh.barwert;
+  const mit = berechne({ ...s, optionen: { ...s.optionen, teileinkuenfte: true } }).varianten.gmbh
+    .barwert;
+  if (!(mit < ohne - 1)) throw new Error('TEV muesste bei niedrigem Tarif guenstiger sein');
+});
+
+T('§ 32d Abs. 6 EStG: Günstigerprüfung erhöht die Belastung nie', () => {
+  // Kernaussage der Norm: die Veranlagung tritt nur ein, wenn sie guenstiger ist.
+  for (const gewinn of [20000, 40000, 60000, 80000, 120000, 200000, 400000, 800000]) {
+    const s = basis({ gewinn });
+    const ohne = berechne(s).varianten.gmbh.barwert;
+    const mit = berechne({ ...s, optionen: { ...s.optionen, guenstigerpruefung: true } }).varianten
+      .gmbh.barwert;
+    if (mit > ohne + 0.01) {
+      throw new Error(`Guenstigerpruefung verteuert bei Gewinn ${gewinn}`);
+    }
+  }
+});
+
+T('Günstigerprüfung bleibt bei hohem zvE ohne Wirkung', () => {
+  const s = basis({ gewinn: 600000, verguetung: 150000 });
+  const ohne = berechne(s).varianten.gmbh;
+  const mit = berechne({ ...s, optionen: { ...s.optionen, guenstigerpruefung: true } }).varianten
+    .gmbh;
+  nah(mit.barwert, ohne.barwert, 0.01);
+  // Es bleibt beim gesonderten Tarif, die Abgeltungsteuer wird weiter ausgewiesen.
+  if (!(mit.perioden[0].komponenten.abgeltungsteuer > 0)) {
+    throw new Error('Abgeltungsteuer haette bestehen bleiben muessen');
+  }
+});
+
+T('Günstigerprüfung greift bei kleinem Gewinn', () => {
+  const s = basis({ gewinn: 50000 });
+  const ohne = berechne(s).varianten.gmbh;
+  const mit = berechne({ ...s, optionen: { ...s.optionen, guenstigerpruefung: true } }).varianten
+    .gmbh;
+  if (!(mit.barwert < ohne.barwert - 1)) throw new Error('Guenstigerpruefung ohne Wirkung');
+  nah(mit.perioden[0].komponenten.abgeltungsteuer, 0);
+});
+
+T('Teileinkünfteverfahren verdrängt die Günstigerprüfung', () => {
+  // § 32d Abs. 6 EStG erfasst nur Ertraege, die dem Abs. 1 unterliegen.
+  const s = basis({ gewinn: 50000 });
+  const nurTev = berechne({ ...s, optionen: { ...s.optionen, teileinkuenfte: true } }).varianten.gmbh
+    .barwert;
+  const beide = berechne({
+    ...s,
+    optionen: { ...s.optionen, teileinkuenfte: true, guenstigerpruefung: true },
+  }).varianten.gmbh.barwert;
+  nah(beide, nurTev, 0.01);
+});
+
+T('Die Wahlrechte des § 32d EStG lassen die Personengesellschaft unberührt', () => {
+  // Entnahmen sind keine Kapitalertraege; die Nachversteuerung nach § 34a Abs. 4
+  // EStG folgt einem eigenen Sondertarif.
+  const s = basis({ gewinn: 400000, thesaurierungsquote: 0.5, bisVz: 2030 });
+  const ohne = berechne(s);
+  const mit = berechne({
+    ...s,
+    optionen: { ...s.optionen, teileinkuenfte: true, guenstigerpruefung: true },
+  });
+  nah(mit.varianten.persG.barwert, ohne.varianten.persG.barwert, 0.01);
+  nah(mit.varianten.persG34a.barwert, ohne.varianten.persG34a.barwert, 0.01);
+});
+
+/* ---------------- Weitere Einkuenfte (Sockelbetrag) ---------------- */
+
+T('Sockel 0 laesst jeden Wert unveraendert', () => {
+  // Regressionsschutz: die veroeffentlichten Werte der Arbeit duerfen sich
+  // durch die Einfuehrung des Sockels nicht verschoben haben.
+  for (const g of [50000, 150000, 500000]) {
+    for (const h of [280, 400, 600]) {
+      const ohne = berechne(basis({ gewinn: g, hebesatz: h, bisVz: 2030, thesaurierungsquote: 0.5 }));
+      const mit = berechne(
+        basis({ gewinn: g, hebesatz: h, bisVz: 2030, thesaurierungsquote: 0.5, weitereEinkuenfte: 0 })
+      );
+      for (const k of ['persG', 'persG34a', 'gmbh', 'optierend']) {
+        gleich(mit.varianten[k].barwert, ohne.varianten[k].barwert);
+      }
+    }
+  }
+});
+
+T('Sockel erhoeht die Belastung, aber nie mehr als der Tarif zulaesst', () => {
+  let vorher = null;
+  for (const W of [0, 20000, 50000, 100000, 300000, 1000000]) {
+    const e = berechne(basis({ gewinn: 200000, weitereEinkuenfte: W }));
+    const b = e.varianten.persG.barwert;
+    if (vorher !== null && b < vorher - 0.01) {
+      throw new Error(`Belastung faellt bei W = ${W}: ${b.toFixed(2)} < ${vorher.toFixed(2)}`);
+    }
+    vorher = b;
+  }
+  // Obergrenze: bei beliebig hohem Sockel greift durchgaengig der Spitzensteuersatz.
+  const grenze = berechne(basis({ gewinn: 200000, weitereEinkuenfte: 5000000 }));
+  const p = grenze.varianten.persG.perioden[0];
+  nah(p.posten.find((x) => x.label === 'tarifliche Einkommensteuer').betrag, 0.45 * 200000, 1.01);
+});
+
+T('Sockel fuehrt in keiner Ausprägung zu negativer zugerechneter Steuer', () => {
+  for (const W of [0, 5000, 12348, 30000, 100000, 500000]) {
+    for (const g of [30000, 60000, 150000, 500000]) {
+      for (const h of [200, 400, 600]) {
+        const e = berechne(
+          basis({ weitereEinkuenfte: W, gewinn: g, verguetung: Math.min(100000, g), hebesatz: h })
+        );
+        for (const k of ['persG', 'persG34a', 'gmbh', 'optierend']) {
+          for (const p of e.varianten[k].perioden) {
+            if (p.komponenten.einkommensteuer < -0.01 || p.komponenten.solz < -0.01 || p.gesamt < -0.01) {
+              throw new Error(`negativ bei W=${W} G=${g} h=${h} ${k}`);
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
+T('§ 35 Abs. 1 S. 5 EStG: Quotient ist 1 ohne weitere Einkuenfte', () => {
+  const p = berechne(basis({ gewinn: 500000 })).varianten.persG.perioden[0];
+  const hb = p.posten.find((x) => x.label === 'Ermäßigungshöchstbetrag').betrag;
+  const est = p.posten.find((x) => x.label === 'tarifliche Einkommensteuer').betrag;
+  nah(hb, est, 0.01);
+});
+
+T('§ 35 Abs. 1 S. 5 EStG: Hoechstbetrag wird anteilig gekuerzt', () => {
+  // Der Hoechstbetrag muss dem Anteil der gewerblichen Einkuenfte an der Summe
+  // der Einkuenfte entsprechen und darf die auf den Gewinn entfallende Steuer
+  // nie uebersteigen (sonst entstuende eine Anrechnung zulasten des Sockels).
+  for (const W of [10000, 50000, 200000]) {
+    for (const g of [40000, 150000, 500000]) {
+      const p = berechne(basis({ gewinn: g, weitereEinkuenfte: W })).varianten.persG.perioden[0];
+      const hb = p.posten.find((x) => x.label === 'Ermäßigungshöchstbetrag').betrag;
+      const estTariflich = p.posten.find((x) => x.label === 'tarifliche Einkommensteuer').betrag;
+      const estGesamt = estTarif(W + g, 2026);
+      nah(hb, (estGesamt * g) / (g + W), 0.02);
+      if (hb > estTariflich + 0.01) {
+        throw new Error(`Hoechstbetrag ${hb.toFixed(2)} > zugerechnete ESt ${estTariflich.toFixed(2)}`);
+      }
+    }
+  }
+});
+
+T('Sockel belastet die Personengesellschaft staerker als die GmbH', () => {
+  // Der Sockel hebt den Grenzsteuersatz. Bei der Personengesellschaft schlaegt
+  // das auf den gesamten Gewinn durch, bei der GmbH nur auf die Vergütung -
+  // die Ausschuettung bleibt beim gesonderten Tarif von 25 %.
+  const b = (W) => berechne(basis({ gewinn: 300000, verguetung: 60000, weitereEinkuenfte: W }));
+  const ohne = b(0);
+  const mit = b(150000);
+  const dPersG = mit.varianten.persG.barwert - ohne.varianten.persG.barwert;
+  const dGmbH = mit.varianten.gmbh.barwert - ohne.varianten.gmbh.barwert;
+  if (!(dPersG > dGmbH)) {
+    throw new Error(`PersG ${dPersG.toFixed(2)} nicht groesser als GmbH ${dGmbH.toFixed(2)}`);
+  }
+});
+
+T('Sockel laesst den Sondertarif des § 34a EStG unberuehrt', () => {
+  // § 34a Abs. 1 EStG ist ein fester Satz von 28,25 %; weitere Einkuenfte
+  // duerfen ihn nicht veraendern.
+  const soll = 0.2825 * 300000;
+  for (const W of [0, 100000, 400000]) {
+    const p = berechne(
+      basis({ gewinn: 300000, weitereEinkuenfte: W, optionen: { schlussausschuettung: false } })
+    ).varianten.persG34a.perioden[0];
+    const st = p.posten.find((x) => /34a Abs. 1|Sondertarif|Thesaurierungssteuer/i.test(x.label + x.norm));
+    if (!st) throw new Error('Posten des Sondertarifs nicht gefunden');
+    nah(st.betrag, soll, 0.02);
+  }
+});
+
+T('Sockel wirkt auf die Wahlrechte des § 32d EStG', () => {
+  // Kleiner Gewinn, kein Sockel: die Guenstigerpruefung greift.
+  const klein = basis({ gewinn: 45000, verguetung: 0, hebesatz: 400 });
+  const ohne = berechne({ ...klein, optionen: { ...klein.optionen, guenstigerpruefung: true } });
+  const ohneRef = berechne(klein);
+  if (!(ohne.varianten.gmbh.barwert < ohneRef.varianten.gmbh.barwert - 0.01)) {
+    throw new Error('Guenstigerpruefung greift ohne Sockel nicht');
+  }
+  // Derselbe Fall mit hohem Sockel: der Tarif liegt ueber 25 %, die
+  // Guenstigerpruefung faellt auf die Abgeltungsteuer zurueck.
+  const gross = basis({ gewinn: 45000, verguetung: 0, hebesatz: 400, weitereEinkuenfte: 120000 });
+  const mit = berechne({ ...gross, optionen: { ...gross.optionen, guenstigerpruefung: true } });
+  const mitRef = berechne(gross);
+  nah(mit.varianten.gmbh.barwert, mitRef.varianten.gmbh.barwert, 0.01);
 });
 
 /* ---------------- Mehrperiodigkeit ---------------- */

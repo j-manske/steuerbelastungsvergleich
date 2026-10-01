@@ -22,7 +22,7 @@ src/core/rates.js   Rechtsstandstabelle je Veranlagungszeitraum
 src/core/tarif.js   Steuerliche Grundfunktionen (§ 32a EStG, SolZ, GewSt, § 35 EStG)
 src/core/model.js   Periodenmodell der vier Ausprägungen, Sensitivität, Barwerte
 src/ui/             Darstellung: Diagramme, Formatierung, Ereignisbehandlung
-tests/              41 Kontrollfälle, davon 7 mit von Hand gerechnetem Sollwert
+tests/              60 Kontrollfälle, davon 9 mit von Hand gerechnetem Sollwert
 ```
 
 Berechnungskern (`src/core/`) und Oberfläche (`src/ui/`) sind strikt getrennt. Der Kern
@@ -67,10 +67,10 @@ entstehen.
 
 ## Kontrollrechnungen
 
-`http://localhost:8765/tests/` aufrufen. Die Seite führt 41 Kontrollfälle aus und zeigt
-je Fall Soll- und Istwert an. Erwartet wird `41/41 bestanden`.
+`http://localhost:8765/tests/` aufrufen. Die Seite führt 60 Kontrollfälle aus und zeigt
+je Fall Soll- und Istwert an. Erwartet wird `60/60 bestanden`.
 
-Sieben Fälle sind mit *Sollwert von Hand* markiert: ihr Erwartungswert ist als feste Zahl
+Neun Fälle sind mit *Sollwert von Hand* markiert: ihr Erwartungswert ist als feste Zahl
 vorgegeben und der Rechenweg im Quelltext vollständig ausgeschrieben. Die übrigen prüfen
 Struktur- und Verhaltenseigenschaften (Linearität, Monotonie, Grenzen des
 Anrechnungsvolumens, Übergang zum Mindesthebesatz).
@@ -121,13 +121,15 @@ Gewinns vor Steuern.
 Die vollständige Annahmenübersicht ist im Tool über die Schaltfläche
 „Methodik & Annahmen" abrufbar. Sie entspricht Tabelle 1 der Arbeit. Zentral:
 
-- Gesellschafter: eine unbeschränkt steuerpflichtige natürliche Person, keine weiteren
-  Einkünfte, keine Kirchensteuer
+- Gesellschafter: eine unbeschränkt steuerpflichtige natürliche Person, keine
+  Kirchensteuer. Weitere tarifliche Einkünfte sind voreingestellt 0, über das Feld
+  „Weitere tarifliche Einkünfte" aber als Sockelbetrag zuschaltbar (siehe unten)
 - Hinzurechnungen und Kürzungen (§§ 8, 9 GewStG) bleiben außer Betracht
 - Tätigkeitsvergütung in allen Ausprägungen betragsgleich und fremdüblich; der Verzicht
   auf eine Vergütung dient als Kontrollrechnung
-- Ausschüttungen unterliegen der Abgeltungsteuer; kein Teileinkünfteverfahren, keine
-  Günstigerprüfung, kein Sparer-Pauschbetrag
+- Ausschüttungen unterliegen im Grundfall der Abgeltungsteuer; kein Sparer-Pauschbetrag.
+  Teileinkünfteverfahren (§ 32d Abs. 2 Nr. 3 EStG) und Günstigerprüfung (§ 32d Abs. 6
+  EStG) sind als Modellvarianten zuschaltbar, in der Voreinstellung aber aus
 - In der Schlussperiode vollständige Entnahme bzw. Ausschüttung samt Nachversteuerung
   nach § 34a Abs. 4 EStG
 - Thesauriertes Vermögen wird nicht verzinst; die Zeitwirkung wird allein über den
@@ -142,6 +144,58 @@ Die vollständige Annahmenübersicht ist im Tool über die Schaltfläche
 etwa die Einbeziehung des Sondertarifs nach § 34a EStG in den Ermäßigungshöchstbetrag des
 § 35 EStG oder die Ausschüttungsfiktion des § 1a Abs. 3 S. 5 KStG.
 
+Zwei Varianten betreffen die Besteuerung der Ausschüttung beim Gesellschafter und wirken
+daher nur auf GmbH und optierende Gesellschaft:
+
+- **Teileinkünfteverfahren** (§ 32d Abs. 2 Nr. 3 EStG): 60 % der Ausschüttung gehen in das
+  zu versteuernde Einkommen ein, 40 % bleiben nach § 3 Nr. 40 Buchst. d EStG steuerfrei.
+  Vorteilhaft erst unterhalb eines Grenzsteuersatzes von 41,67 %, weil 60 % davon gerade
+  25 % ergeben. Im Basisszenario ist der Antrag nachteilig.
+- **Günstigerprüfung** (§ 32d Abs. 6 EStG): die Ausschüttung wird in voller Höhe dem zu
+  versteuernden Einkommen hinzugerechnet, wenn das zu einer niedrigeren Steuer führt.
+  Maßstab ist der *Durchschnitts*-, nicht der Grenzsteuersatz auf die Ausschüttung, und
+  die Vergleichsgröße beträgt 26,375 % — nicht 25 %, weil der Solidaritätszuschlag auf
+  die Kapitalertragsteuer pauschal ohne Freigrenze erhoben wird, auf die veranlagte
+  Einkommensteuer dagegen mit Freigrenze und Milderungszone (§ 4 SolZG). Praktisch
+  greift der Antrag nur, solange die übrigen Einkünfte unter rund 24.750 EUR liegen.
+
+Beide verdrängen den gesonderten Tarif; der Solidaritätszuschlag folgt dann § 4 SolZG mit
+Freigrenze und Milderungszone statt der pauschalen Erhebung auf die Kapitalertragsteuer.
+Da § 32d Abs. 6 EStG nur Erträge erfasst, die dem gesonderten Tarif unterliegen, sperrt
+ein beantragtes Teileinkünfteverfahren die Günstigerprüfung.
+
+### Weitere tarifliche Einkünfte (Sockelbetrag)
+
+Tabelle 2 der Arbeit unterstellt einen Gesellschafter ohne weitere Einkünfte. Diese
+Annahme ist nicht neutral: der Grenzsteuersatz des § 32a EStG hängt am gesamten zu
+versteuernden Einkommen, nicht am Gewinn allein. Das Feld erlaubt es, die Annahme
+aufzuheben, ohne den Vergleichsmaßstab zu verändern.
+
+Die weiteren Einkünfte *W* wirken ausschließlich als Sockel. In jede Tarifberechnung geht
+*W + X* ein, zugerechnet wird aber nur die Differenz `ESt(W + X) − ESt(W)`, entsprechend
+beim Solidaritätszuschlag. Verglichen wird damit weiterhin allein die Belastung des
+Betriebsergebnisses; Nenner der Effektivbelastung bleibt der Gewinn. Bei *W* = 0 ändert
+sich kein einziger Wert — die 27 veröffentlichten Werte der Ergebnistabelle sind durch
+Kontrollfälle als unverändert abgesichert.
+
+Zwei Wirkungen sind zu beachten:
+
+- Der Ermäßigungshöchstbetrag des § 35 EStG wird nach § 35 Abs. 1 S. 5 EStG auf den
+  Anteil der gewerblichen Einkünfte an der Summe der Einkünfte gekürzt. Ohne weitere
+  Einkünfte beträgt der Quotient 1; mit Sockel sinkt er. Weil wegen der Progression
+  stets `ESt(W) ≤ ESt(W + G) · W/(W + G)` gilt, kann die zugerechnete Steuer durch die
+  Anrechnung nie negativ werden.
+- Der Sockel belastet die Personengesellschaft stärker als die Kapitalgesellschaften:
+  bei transparenter Besteuerung schlägt der höhere Grenzsteuersatz auf den gesamten
+  Gewinn durch, bei GmbH und optierender Gesellschaft nur auf die Tätigkeitsvergütung,
+  während die Ausschüttung dem festen Satz des § 32d Abs. 1 EStG unterliegt. Der
+  Sondertarif des § 34a Abs. 1 EStG und die Nachversteuerung nach § 34a Abs. 4 EStG
+  bleiben vom Sockel unberührt, da beide feste Sätze sind.
+
+Für die Wahlrechte des § 32d EStG ist der Sockel die eigentlich maßgebliche Größe: er
+entscheidet darüber, ob Teileinkünfteverfahren oder Günstigerprüfung überhaupt greifen
+können.
+
 ## Bedienung
 
 - **Gewerbesteuerhebesatz** ist die Untersuchungsvariable; das Sensitivitätsdiagramm
@@ -149,6 +203,9 @@ etwa die Einbeziehung des Sondertarifs nach § 34a EStG in den Ermäßigungshöc
   Untergrenze nach § 16 Abs. 4 S. 2 GewStG bis zum oberen Rand des Gemeindebereichs) und
   markiert den eingestellten Wert. Das Zahlenfeld lässt darüber hinausgehende Werte zu;
   die Diagrammspanne wird dann entsprechend erweitert.
+- **Weitere tarifliche Einkünfte** kalibrieren den Grenzsteuersatz des Gesellschafters.
+  Die auf sie selbst entfallende Steuer wird herausgerechnet; voreingestellt sind 0 EUR,
+  sodass die Startansicht unverändert die Werte der Arbeit zeigt.
 - **Entnahme- bzw. Ausschüttungsquote** gibt den laufend entnommenen Anteil an; der Rest
   wird thesauriert. Voreingestellt sind 50 %, also hälftige Entnahme und hälftige
   Thesaurierung.

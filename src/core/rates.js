@@ -13,6 +13,9 @@ export const KONSTANTEN = {
   abgeltungsteuerSatz: 0.25,
   nachversteuerungssatz34a: 0.25,
   anrechnungsfaktor35: 4.0,
+  /** Steuerpflichtiger Anteil der Ausschuettung im Teileinkuenfteverfahren
+   *  (§ 3 Nr. 40 Buchst. d EStG); 40 % bleiben steuerfrei. */
+  teileinkuenfteAnteil: 0.6,
 };
 
 /**
