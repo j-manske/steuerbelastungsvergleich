@@ -502,13 +502,61 @@ button.primaer:hover {
 .chart .marker {
   stroke: #111;
   stroke-width: 1.2;
-  stroke-dasharray: 4 3;
-  opacity: 0.55;
+  opacity: 0.6;
 }
 .chart .marker-label {
   font-size: 11px;
   fill: #111;
   font-weight: 600;
+}
+
+/* Vergleichshebesatz: gestrichelt, damit er vom eingestellten Hebesatz
+   unterscheidbar bleibt. */
+.chart .marker-zweit {
+  stroke: #111;
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+  opacity: 0.5;
+}
+.chart .marker-zweit-label {
+  font-size: 11px;
+  fill: #111;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* Knickpunkt des § 35 EStG bei 400 %: gepunktet und gedaempft, weil er keine
+   Eingabe ist, sondern eine Eigenschaft des Gesetzes. */
+.chart .marker-knick {
+  stroke: var(--warn);
+  stroke-width: 1.1;
+  stroke-dasharray: 1.5 3;
+  opacity: 0.8;
+}
+.chart .marker-knick-label {
+  font-size: 10.5px;
+  fill: var(--warn);
+  font-weight: 600;
+}
+
+/* Vorteilsfenster zwischen zwei Schnittpunkten. */
+.chart .zone {
+  fill: var(--akzent);
+  opacity: 0.05;
+}
+.chart .zone-label {
+  font-size: 10.5px;
+  fill: var(--akzent);
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+/* Rangwechsel auf der Kurve. */
+.chart .punktmarke {
+  fill: #fff;
+  stroke: #111;
+  stroke-width: 1.6;
+  opacity: 0.85;
 }
 .chart .fokus-linie {
   stroke: #8b93a1;

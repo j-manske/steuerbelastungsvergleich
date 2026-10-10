@@ -81,25 +81,74 @@ export function gewerbesteuer(gewerbeertrag, freibetrag, hebesatzProzent) {
 }
 
 /**
- * Steuerermaessigung nach § 35 EStG: das Vierfache des Messbetrags, begrenzt
- * auf die tatsaechlich zu zahlende Gewerbesteuer und auf den
- * Ermaessigungshoechstbetrag. Ueberhaenge sind weder vor- noch ruecktragbar.
+ * Steuerermaessigung nach § 35 EStG: das Vierfache des Messbetrags
+ * (§ 35 Abs. 1 S. 1 Nr. 1 EStG), begrenzt auf den Ermaessigungshoechstbetrag
+ * (§ 35 Abs. 1 S. 2 EStG) und auf die tatsaechlich zu zahlende Gewerbesteuer
+ * (§ 35 Abs. 1 S. 5 EStG). Ueberhaenge sind weder vor- noch ruecktragbar.
+ *
+ * Die beiden hebesatzabhaengigen Grenzen wirken in entgegengesetzten Bereichen:
+ *   - unter 400 % ist das Anrechnungsvolumen groesser als die gezahlte
+ *     Gewerbesteuer, es bindet also S. 5 und ein Teil des Volumens verfaellt;
+ *   - ab 400 % ist die gezahlte Gewerbesteuer groesser als das Volumen, die
+ *     ueber 4 x Messbetrag hinausgehende Gewerbesteuer bleibt endgueltig.
+ * Der Umschlagpunkt liegt wegen 4 x 3,5 % = 14 % stets bei genau 400 %,
+ * unabhaengig von Gewinn und Freibetrag.
+ *
+ * Der Ermaessigungshoechstbetrag des S. 2 ist davon unabhaengig und kann in
+ * BEIDEN Bereichen zusaetzlich binden - etwa wenn die Steuer nach § 34a Abs. 1
+ * EStG nicht in den Hoechstbetrag einbezogen wird. Die Ursachen schliessen
+ * einander deshalb nicht aus; die Funktion weist sie einzeln aus.
  */
 export function ermaessigung35(messbetrag, gezahlteGewSt, ermaessigungshoechstbetrag) {
   const volumen = KONSTANTEN.anrechnungsfaktor35 * messbetrag;
+  const hoechst = Math.max(0, ermaessigungshoechstbetrag);
   const nachGewSt = Math.min(volumen, gezahlteGewSt);
-  const anrechnung = Math.max(0, Math.min(nachGewSt, Math.max(0, ermaessigungshoechstbetrag)));
+  const anrechnung = Math.max(0, Math.min(nachGewSt, hoechst));
+
+  // Drei disjunkte Ursachen dafuer, dass Anrechnungsvolumen oder gezahlte
+  // Gewerbesteuer ohne Wirkung bleiben.
+  /** Volumen ohne dahinterstehende Gewerbesteuer - nur unterhalb von 400 %. */
+  const ohneGewSt = Math.max(0, volumen - gezahlteGewSt);
+  /** Gewerbesteuer ueber 4 x Messbetrag - nur oberhalb von 400 %. */
+  const ueberVolumen = Math.max(0, gezahlteGewSt - volumen);
+  /** Vom Hoechstbetrag blockierter Teil - hebesatzunabhaengig. */
+  const durchHoechstbetrag = Math.max(0, nachGewSt - anrechnung);
+
+  const ursachen = [];
+  if (ohneGewSt > 1e-9) {
+    ursachen.push('Begrenzung auf die gezahlte Gewerbesteuer, Hebesatz unter 400 % (§ 35 Abs. 1 S. 5 EStG)');
+  }
+  if (ueberVolumen > 1e-9) {
+    ursachen.push('Gewerbesteuer über 4 × Messbetrag, Hebesatz über 400 % (§ 35 Abs. 1 S. 1 Nr. 1 EStG)');
+  }
+  if (durchHoechstbetrag > 1e-9) {
+    ursachen.push('Ermäßigungshöchstbetrag (§ 35 Abs. 1 S. 2 EStG)');
+  }
+
   return {
     anrechnungsvolumen: volumen,
     begrenztAufGewSt: nachGewSt,
     ermaessigungshoechstbetrag,
     anrechnung,
-    ueberhang: Math.max(0, volumen - anrechnung),
-    ueberhangUrsache:
-      volumen > gezahlteGewSt + 1e-9
-        ? 'Hebesatz > 400 % (§ 35 Abs. 1 S. 5 EStG)'
-        : nachGewSt > anrechnung + 1e-9
-          ? 'Ermaessigungshoechstbetrag'
-          : null,
+    /**
+     * Ungenutztes Anrechnungsvolumen (4 x Messbetrag ./. Anrechnung);
+     * identisch mit ohneGewSt + durchHoechstbetrag.
+     */
+    ueberhang: ohneGewSt + durchHoechstbetrag,
+    /**
+     * Gezahlte Gewerbesteuer, die keine Ermaessigung ausgeloest hat und damit
+     * endgueltige Belastung bleibt; identisch mit ueberVolumen +
+     * durchHoechstbetrag.
+     *
+     * ACHTUNG: ueberhang und nichtAngerechneteGewSt sind NICHT disjunkt. Sie
+     * teilen sich den Summanden durchHoechstbetrag und duerfen deshalb nicht
+     * addiert werden.
+     */
+    nichtAngerechneteGewSt: ueberVolumen + durchHoechstbetrag,
+    ohneGewSt,
+    ueberVolumen,
+    durchHoechstbetrag,
+    ursachen,
+    ueberhangUrsache: ursachen.length ? ursachen.join('; ') : null,
   };
 }

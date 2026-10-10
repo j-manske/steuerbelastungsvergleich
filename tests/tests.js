@@ -190,7 +190,7 @@ H('Sollwert 9 - Sockelbetrag, PersG Regel, G 500.000 EUR, W 100.000 EUR -> 228.5
   // ESt(W + G) = 0,45 * 600.000 - 19.470,74 = 250.529,26 -> 250.529
   // tarifliche ESt des Gewinns = 250.529 - 30.864         = 219.665,00
   //
-  // § 35 Abs. 1 S. 5 EStG: Hoechstbetrag nur anteilig
+  // § 35 Abs. 1 S. 2 EStG: Hoechstbetrag nur anteilig
   //   Anteil = 500.000 / 600.000 = 83,33 %
   //   Hoechstbetrag = 250.529 * 5/6                       = 208.774,17
   //   Anrechnung = min(4 * 16.642,50 ; 66.570 ; 208.774,17) = 66.570,00
@@ -255,13 +255,108 @@ T('§ 35 EStG: bei 400 % deckt das Vierfache die Gewerbesteuer exakt', () => {
   nah(e.ueberhang, 0);
 });
 
-T('§ 35 EStG: oberhalb 400 % entsteht ein Anrechnungsüberhang', () => {
+T('§ 35 Abs. 1 S. 5 EStG: oberhalb 400 % bleibt Gewerbesteuer endgültig', () => {
   const g = gewerbesteuer(300000, 24500, 500);
   const e = ermaessigung35(g.messbetrag, g.steuer, 999999);
   nah(e.anrechnung, 38570);
+  // Das Anrechnungsvolumen ist voll ausgeschoepft, es verfaellt nichts davon.
   nah(e.ueberhang, 0);
-  // Die ueberschiessende Gewerbesteuer wird definitiv:
+  // Die ueberschiessende Gewerbesteuer wird definitiv - das ist die Groesse,
+  // die den Hebesatzeffekt oberhalb von 400 % allein traegt.
+  nah(e.nichtAngerechneteGewSt, 9642.5);
   nah(g.steuer - e.anrechnung, 9642.5);
+});
+
+T('§ 35 EStG: die hebesatzabhaengigen Begrenzungen trennen sich bei 400 %', () => {
+  // Nur die beiden hebesatzabhaengigen Ursachen schliessen einander aus:
+  // unterhalb von 400 % verfaellt Anrechnungsvolumen mangels Gewerbesteuer
+  // (S. 5), oberhalb bleibt Gewerbesteuer ueber 4 x Messbetrag endgueltig.
+  // Ein bindender Ermaessigungshoechstbetrag ist davon unabhaengig und hier
+  // durch einen sehr hohen Wert ausgeschaltet.
+  for (const h of [200, 280, 350, 399, 400, 401, 450, 600]) {
+    const g = gewerbesteuer(300000, 24500, h);
+    const e = ermaessigung35(g.messbetrag, g.steuer, 999999);
+    gleich(e.durchHoechstbetrag < 0.01, true);
+    if (e.ohneGewSt > 0.01 && e.ueberVolumen > 0.01) {
+      throw new Error(`bei h = ${h} % treten beide Hebesatzursachen zugleich auf`);
+    }
+    if (h < 400 && e.ueberVolumen > 0.01) {
+      throw new Error(`bei h = ${h} % darf keine Gewerbesteuer endgueltig bleiben`);
+    }
+    if (h > 400 && e.ohneGewSt > 0.01) {
+      throw new Error(`bei h = ${h} % darf kein Anrechnungsvolumen mangels GewSt verfallen`);
+    }
+  }
+});
+
+T('§ 35 EStG: die drei Ursachen zerlegen Volumen und Gewerbesteuer vollstaendig', () => {
+  // Es gelten zwei Identitaeten, und zwar fuer jede Konstellation:
+  //   ungenutztes Volumen        = ohneGewSt      + durchHoechstbetrag
+  //   nicht angerechnete GewSt   = ueberVolumen   + durchHoechstbetrag
+  // Beide teilen den Summanden durchHoechstbetrag und sind deshalb NICHT
+  // disjunkt; sie duerfen nicht addiert werden.
+  for (const h of [200, 280, 350, 400, 450, 600]) {
+    for (const hoechst of [0, 1000, 20000, 38570, 999999]) {
+      const g = gewerbesteuer(300000, 24500, h);
+      const e = ermaessigung35(g.messbetrag, g.steuer, hoechst);
+      nah(e.ueberhang, e.anrechnungsvolumen - e.anrechnung);
+      nah(e.ueberhang, e.ohneGewSt + e.durchHoechstbetrag);
+      nah(e.nichtAngerechneteGewSt, g.steuer - e.anrechnung);
+      nah(e.nichtAngerechneteGewSt, e.ueberVolumen + e.durchHoechstbetrag);
+      // Die Anrechnung ist nie groesser als eine der drei Grenzen.
+      gleich(e.anrechnung <= e.anrechnungsvolumen + 1e-6, true);
+      gleich(e.anrechnung <= g.steuer + 1e-6, true);
+      gleich(e.anrechnung <= hoechst + 1e-6, true);
+    }
+  }
+});
+
+H('Sollwert 12 - § 35 EStG, Hoechstbetrag und Hebesatzgrenze binden zugleich', () => {
+  // Messbetrag 10.000 -> Volumen 40.000; gezahlte
+  // Gewerbesteuer 30.000 (entspricht einem Hebesatz von 300 %), davon
+  // anrechenbar nur 12.000 wegen des Hoechstbetrags.
+  //   ohneGewSt          = 40.000 - 30.000 = 10.000
+  //   durchHoechstbetrag = 30.000 - 12.000 = 18.000
+  //   ueberVolumen       = 0
+  //   ungenutztes Volumen      = 10.000 + 18.000 = 28.000
+  //   nicht angerechnete GewSt =      0 + 18.000 = 18.000
+  const e = ermaessigung35(10000, 30000, 12000);
+  nah(e.anrechnung, 12000);
+  nah(e.ohneGewSt, 10000);
+  nah(e.durchHoechstbetrag, 18000);
+  nah(e.ueberVolumen, 0);
+  nah(e.ueberhang, 28000);
+  nah(e.nichtAngerechneteGewSt, 18000);
+  // Hier tritt der Fall auf, den der frueher behauptete Ausschluss verneinte.
+  gleich(e.ursachen.length, 2);
+});
+
+T('§ 35 EStG: Ursache der Begrenzung wird richtig benannt', () => {
+  // Der fruehere Text behauptete unterhalb von 400 % einen "Hebesatz > 400 %".
+  const unten = gewerbesteuer(300000, 24500, 300);
+  const eUnten = ermaessigung35(unten.messbetrag, unten.steuer, 999999);
+  if (!/unter 400 %/.test(eUnten.ueberhangUrsache ?? '')) {
+    throw new Error(`unerwartete Ursache unterhalb 400 %: ${eUnten.ueberhangUrsache}`);
+  }
+  if (/über 400 %/.test(eUnten.ueberhangUrsache ?? '')) {
+    throw new Error(`unterhalb 400 % darf kein "über 400 %" behauptet werden: ${eUnten.ueberhangUrsache}`);
+  }
+  // Greift der Hoechstbetrag, muss § 35 Abs. 1 S. 2 EStG genannt werden.
+  const oben = gewerbesteuer(300000, 24500, 400);
+  const eOben = ermaessigung35(oben.messbetrag, oben.steuer, 1000);
+  if (!/S\. 2 EStG/.test(eOben.ueberhangUrsache ?? '')) {
+    throw new Error(`unerwartete Ursache beim Hoechstbetrag: ${eOben.ueberhangUrsache}`);
+  }
+  // Binden beide, muessen beide genannt werden.
+  const beide = ermaessigung35(10000, 30000, 12000);
+  for (const muster of [/S\. 5 EStG/, /S\. 2 EStG/]) {
+    if (!muster.test(beide.ueberhangUrsache ?? '')) {
+      throw new Error(`Ursache unvollstaendig: ${beide.ueberhangUrsache}`);
+    }
+  }
+  // Ohne jede Begrenzung bleibt die Ursache leer.
+  const glatt = ermaessigung35(10000, 40000, 999999);
+  gleich(glatt.ueberhangUrsache, null);
 });
 
 T('§ 4 SolZG: Freigrenze greift unterhalb von 20.350 EUR', () => {
@@ -334,17 +429,47 @@ T('§ 34a EStG: ohne Einbeziehung zehrt der Sondertarif den Höchstbetrag auf', 
     basis({ optionen: { schlussausschuettung: false, est34aImHoechstbetrag: false } })
   );
   const p = e.varianten.persG34a.perioden[0];
-  const ueberhang = p.posten.find((x) => x.label.startsWith('Anrechnungsüberhang'));
+  const ueberhang = p.posten.find((x) => x.label.includes('ungenutztes Anrechnungsvolumen'));
   nah(ueberhang.betrag, 4 * 9642.5, 1);
 });
 
+T('§ 34a Abs. 4 EStG: die Nachsteuer erhoeht den Ermaessigungshoechstbetrag nicht', () => {
+  // Der Nachversteuerungsbetrag ist keine Einkunft und nicht Teil des zvE. Er
+  // steht deshalb in keiner der beiden Summen des § 35 Abs. 1 S. 2 EStG; die
+  // Steuer darauf darf den Multiplikator nicht erhoehen.
+  //
+  // Konstellation: volle Thesaurierung, Sondertarif ausserhalb des
+  // Hoechstbetrags, Schlussausschuettung. Der regelbesteuerte Gewinnanteil ist
+  // 0, also ist der Hoechstbetrag 0 - und zwar trotz einer Nachsteuer von
+  // 210.588,75 EUR in derselben Periode. Ginge sie ein, waere der Hoechstbetrag
+  // groesser als die Gewerbesteuer und die Anrechnung kippte vollstaendig.
+  const s = basis({
+    gewinn: 300000,
+    hebesatz: 300,
+    thesaurierungsquote: 1,
+    optionen: { est34aImHoechstbetrag: false, schlussausschuettung: true },
+  });
+  const p = berechne(s).varianten.persG34a.perioden[0];
+  const holen = (l) => p.posten.find((x) => x.label.startsWith(l)).betrag;
+  const nachsteuer = holen('Nachversteuerung');
+  // Die Nachsteuer muss ueberhaupt anfallen, sonst prueft der Fall nichts.
+  if (!(nachsteuer > 100000)) {
+    throw new Error(`Nachsteuer zu klein, Fall prueft nichts: ${nachsteuer.toFixed(2)}`);
+  }
+  nah(holen('Ermäßigungshöchstbetrag'), 0, 0.01);
+  nah(holen('./. Steuerermäßigung'), 0, 0.01);
+  // Die gesamte Gewerbesteuer bleibt endgueltig: 9.642,50 * 3 = 28.927,50
+  nah(holen('nicht angerechnete Gewerbesteuer'), 28927.5, 0.02);
+});
+
 T('§ 34a EStG: Einbeziehung in den Hoechstbetrag ist Standard und erhaelt die Anrechnung', () => {
-  // Auffassung der Finanzverwaltung, der die Arbeit folgt: Steuer auf den
-  // beguenstigten Gewinn und Nachsteuer gehen in den Hoechstbetrag ein.
+  // Auffassung der Finanzverwaltung, der die Arbeit folgt: die Steuer auf den
+  // beguenstigten Gewinn nach § 34a Abs. 1 EStG geht in den Hoechstbetrag ein.
+  // Die Nachsteuer des Abs. 4 dagegen nicht - siehe vorstehenden Fall.
   gleich(STANDARD_SZENARIO.optionen.est34aImHoechstbetrag, true);
   const e = berechne(basis({ optionen: { schlussausschuettung: false } }));
   const p = e.varianten.persG34a.perioden[0];
-  const ueberhang = p.posten.find((x) => x.label.startsWith('Anrechnungsüberhang'));
+  const ueberhang = p.posten.find((x) => x.label.includes('ungenutztes Anrechnungsvolumen'));
   nah(ueberhang.betrag, 0, 1);
 });
 
@@ -585,14 +710,14 @@ T('Sockel fuehrt in keiner Ausprägung zu negativer zugerechneter Steuer', () =>
   }
 });
 
-T('§ 35 Abs. 1 S. 5 EStG: Quotient ist 1 ohne weitere Einkuenfte', () => {
+T('§ 35 Abs. 1 S. 2 EStG: Quotient ist 1 ohne weitere Einkuenfte', () => {
   const p = berechne(basis({ gewinn: 500000 })).varianten.persG.perioden[0];
   const hb = p.posten.find((x) => x.label === 'Ermäßigungshöchstbetrag').betrag;
   const est = p.posten.find((x) => x.label === 'tarifliche Einkommensteuer').betrag;
   nah(hb, est, 0.01);
 });
 
-T('§ 35 Abs. 1 S. 5 EStG: Hoechstbetrag wird anteilig gekuerzt', () => {
+T('§ 35 Abs. 1 S. 2 EStG: Hoechstbetrag wird anteilig gekuerzt', () => {
   // Der Hoechstbetrag muss dem Anteil der gewerblichen Einkuenfte an der Summe
   // der Einkuenfte entsprechen und darf die auf den Gewinn entfallende Steuer
   // nie uebersteigen (sonst entstuende eine Anrechnung zulasten des Sockels).
@@ -652,6 +777,138 @@ T('Sockel wirkt auf die Wahlrechte des § 32d EStG', () => {
   const mit = berechne({ ...gross, optionen: { ...gross.optionen, guenstigerpruefung: true } });
   const mitRef = berechne(gross);
   nah(mit.varianten.gmbh.barwert, mitRef.varianten.gmbh.barwert, 0.01);
+});
+
+/* ---------------- Hebesatzstruktur ---------------- *
+ *
+ * Die folgenden Faelle sichern die Aussage der Arbeit zum Hebesatzeffekt ab.
+ * Sie pruefen nicht einzelne Betraege, sondern die Gestalt der Belastungskurve:
+ * den Knick bei 400 %, die Steigung links und rechts davon und die daraus
+ * folgende Zweiseitigkeit des Vorteilsfensters.
+ */
+
+H('Sollwert 10 - Steigung der PersG oberhalb von 400 % ist der Messbetrag', () => {
+  // Oberhalb von 400 % ist die Anrechnung auf 4 x Messbetrag eingefroren,
+  // waehrend die Gewerbesteuer weiter mit h steigt. Je 100 Hebesatzpunkte
+  // bleibt deshalb genau ein Messbetrag zusaetzlich haengen:
+  //   G = 300.000, F = 24.500  ->  Messbetrag = 275.500 x 3,5 % = 9.642,50
+  //   Belastung(500 %) ./. Belastung(450 %) = 0,5 x 9.642,50 = 4.821,25
+  const m = (300000 - 24500) * 0.035;
+  nah(m, 9642.5);
+  for (const v of ['persG', 'persG34a']) {
+    const a = berechne(basis({ hebesatz: 450 })).varianten[v].barwert;
+    const b = berechne(basis({ hebesatz: 500 })).varianten[v].barwert;
+    nah(b - a, 0.5 * m, 0.02);
+  }
+});
+
+H('Sollwert 11 - Steigung der PersG unterhalb von 400 % ist allein der SolZ', () => {
+  // Unterhalb von 400 % zehrt die Anrechnung die Gewerbesteuer vollstaendig auf.
+  // Was bleibt, ist der Solidaritaetszuschlag auf die um die Anrechnung
+  // geminderte Einkommensteuer; die Belastung sinkt also sogar leicht:
+  //   d/dh = -5,5 % x Messbetrag je 100 Punkte = -0,055 x 9.642,50 = -530,34
+  //   Belastung(350 %) ./. Belastung(300 %) = -0,5 x 530,34 = -265,17
+  const m = (300000 - 24500) * 0.035;
+  const a = berechne(basis({ hebesatz: 300 })).varianten.persG.barwert;
+  const b = berechne(basis({ hebesatz: 350 })).varianten.persG.barwert;
+  nah(b - a, -0.5 * 0.055 * m, 0.02);
+});
+
+T('Knick der PersG-Kurve liegt bei 400 %, nicht davor oder dahinter', () => {
+  const steigung = (h1, h2) =>
+    (berechne(basis({ hebesatz: h2 })).varianten.persG.barwert -
+      berechne(basis({ hebesatz: h1 })).varianten.persG.barwert) /
+    (h2 - h1);
+  // Links des Knicks fallend, rechts steigend - und der Vorzeichenwechsel
+  // findet zwischen 395 % und 405 % statt.
+  if (!(steigung(300, 395) < 0)) throw new Error('Kurve faellt unterhalb 400 % nicht');
+  if (!(steigung(405, 600) > 0)) throw new Error('Kurve steigt oberhalb 400 % nicht');
+  if (!(steigung(380, 395) < 0)) throw new Error('Knick liegt zu frueh');
+  if (!(steigung(405, 420) > 0)) throw new Error('Knick liegt zu spaet');
+});
+
+T('Lage des Knicks ist von Gewinn, Freibetrag und Vergütung unabhängig', () => {
+  // 4 x Messbetrag = Messbetrag x h/100 kuerzt sich zu h = 400; der Messbetrag
+  // selbst - und damit Gewinn, Freibetrag und Verguetung - faellt heraus.
+  for (const gewinn of [60000, 300000, 2000000]) {
+    for (const verguetung of [0, 150000]) {
+      const vor = berechne(basis({ gewinn, verguetung, hebesatz: 395 })).varianten.persG.perioden[0];
+      const nach = berechne(basis({ gewinn, verguetung, hebesatz: 405 })).varianten.persG.perioden[0];
+      const holen = (p, l) => p.posten.find((x) => x.label === l).betrag;
+      if (!(holen(vor, 'nachrichtlich: ungenutztes Anrechnungsvolumen (verfällt)') > 0.01)) {
+        throw new Error(`kein verfallendes Volumen bei 395 % (G ${gewinn}, V ${verguetung})`);
+      }
+      if (!(holen(nach, 'nicht angerechnete Gewerbesteuer') > 0.01)) {
+        throw new Error(`keine nicht angerechnete GewSt bei 405 % (G ${gewinn}, V ${verguetung})`);
+      }
+    }
+  }
+});
+
+T('Kapitalgesellschaft verläuft ohne Knick linear im Hebesatz', () => {
+  // Die GmbH kennt keine Anrechnung; ihre Belastung steigt gleichmaessig.
+  // Die zweite Differenz muss daher ueber den Knick hinweg verschwinden.
+  const b = (h) => berechne(basis({ hebesatz: h })).varianten.gmbh.barwert;
+  const zweite = b(500) - 2 * b(400) + b(300);
+  nah(zweite, 0, 0.02);
+});
+
+T('Vorteil der Personengesellschaft ist ein Fenster, keine Schwelle', () => {
+  // Eine geknickte Kurve schneidet eine Gerade zweimal. Der Vorteil der
+  // Personengesellschaft gegenueber der GmbH ist deshalb beidseitig begrenzt:
+  // unterhalb des Fensters traegt die GmbH die niedrigere Gesamtbelastung,
+  // oberhalb schlaegt die nicht angerechnete Gewerbesteuer durch.
+  const szenario = {
+    gewinn: 500000,
+    verguetung: 100000,
+    weitereEinkuenfte: 0,
+    thesaurierungsquote: 0.5,
+    kalkulationszins: 0.03,
+    vonVz: 2026,
+    bisVz: 2032,
+    tarifVz: 2026,
+    optionen: { ...PRUEF_OPTIONEN },
+  };
+  const vorteil = (h) => {
+    const e = berechne({ ...szenario, hebesatz: h });
+    return e.varianten.gmbh.barwert - e.varianten.persG.barwert;
+  };
+  let wechsel = 0;
+  let vorher = Math.sign(vorteil(280));
+  for (let h = 285; h <= 600; h += 5) {
+    const jetzt = Math.sign(vorteil(h));
+    if (jetzt !== vorher) wechsel += 1;
+    vorher = jetzt;
+  }
+  gleich(wechsel, 2);
+  // Innerhalb des Fensters guenstiger, an beiden Raendern des untersuchten
+  // Bereichs unguenstiger.
+  if (!(vorteil(400) > 0)) throw new Error('PersG bei 400 % nicht im Vorteil');
+  if (!(vorteil(280) < 0)) throw new Error('PersG bei 280 % unerwartet im Vorteil');
+  if (!(vorteil(600) < 0)) throw new Error('PersG bei 600 % unerwartet im Vorteil');
+});
+
+T('Bei vollständiger Thesaurierung gibt es kein Fenster der Regelbesteuerung', () => {
+  // Ohne laufende Entnahme entfaellt der Stundungsvorteil der Thesaurierung
+  // nicht, sondern wirkt allein zugunsten der Kapitalgesellschaft: die
+  // Regelbesteuerung ist dann im gesamten untersuchten Bereich teurer.
+  const szenario = {
+    gewinn: 500000,
+    verguetung: 100000,
+    weitereEinkuenfte: 0,
+    thesaurierungsquote: 1,
+    kalkulationszins: 0.03,
+    vonVz: 2026,
+    bisVz: 2032,
+    tarifVz: 2026,
+    optionen: { ...PRUEF_OPTIONEN },
+  };
+  for (let h = 280; h <= 600; h += 10) {
+    const e = berechne({ ...szenario, hebesatz: h });
+    if (!(e.varianten.persG.barwert > e.varianten.gmbh.barwert)) {
+      throw new Error(`Regelbesteuerung bei ${h} % unerwartet guenstiger als die GmbH`);
+    }
+  }
 });
 
 /* ---------------- Mehrperiodigkeit ---------------- */

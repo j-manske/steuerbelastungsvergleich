@@ -37,6 +37,14 @@ export function linienDiagramm(container, punkte, reihen, optionen = {}) {
     formatX = (v) => String(v),
     marker = null,
     markerLabel = '',
+    // Hinterlegte Bereiche, z. B. der Korridor, in dem eine Auspraegung
+    // guenstiger ist: [{ von, bis, label }].
+    zonen = [],
+    // Weitere senkrechte Linien neben dem eingestellten Hebesatz:
+    // [{ x, label, klasse }]. Genutzt fuer Vergleichshebesatz und Knickpunkt.
+    markierungen = [],
+    // Einzelne hervorgehobene Kurvenpunkte: [{ x, y, titel }].
+    punktMarken = [],
   } = optionen;
   const formatAchse = optionen.formatAchse ?? formatY;
 
@@ -74,6 +82,28 @@ export function linienDiagramm(container, punkte, reihen, optionen = {}) {
     class: 'chart',
   });
 
+  // Zonen zuerst, damit Raster und Linien darueber liegen.
+  for (const z of zonen) {
+    const a = Math.max(xMin, Math.min(z.von, z.bis));
+    const b = Math.min(xMax, Math.max(z.von, z.bis));
+    if (!(b > a)) continue;
+    svg.appendChild(
+      el('rect', { x: sx(a), y: pad.top, width: sx(b) - sx(a), height: h, class: 'zone' })
+    );
+    if (z.label) {
+      // Unten beschriften: oben links sitzt die Beschriftung des eingestellten
+      // Hebesatzes, mit der sich eine mittig gesetzte Zonenbeschriftung
+      // ueberlagert. Eine Zeile ueber den uebrigen Markerbeschriftungen.
+      svg.appendChild(
+        el(
+          'text',
+          { x: (sx(a) + sx(b)) / 2, y: pad.top + h - 26, class: 'zone-label', 'text-anchor': 'middle' },
+          z.label
+        )
+      );
+    }
+  }
+
   for (const t of raster.ticks) {
     svg.appendChild(el('line', { x1: pad.left, x2: pad.left + w, y1: sy(t), y2: sy(t), class: 'grid' }));
     svg.appendChild(
@@ -91,13 +121,35 @@ export function linienDiagramm(container, punkte, reihen, optionen = {}) {
 
   svg.appendChild(el('line', { x1: pad.left, x2: pad.left + w, y1: pad.top + h, y2: pad.top + h, class: 'axis' }));
 
-  if (marker !== null && marker >= xMin && marker <= xMax) {
+  // Zusatzmarkierungen (Knickpunkt, Vergleichshebesatz) vor den Kurven,
+  // der eingestellte Hebesatz danach - er soll oben liegen.
+  for (const mk of markierungen) {
+    if (mk.x < xMin || mk.x > xMax) continue;
     svg.appendChild(
-      el('line', { x1: sx(marker), x2: sx(marker), y1: pad.top, y2: pad.top + h, class: 'marker' })
+      el('line', {
+        x1: sx(mk.x),
+        x2: sx(mk.x),
+        y1: pad.top,
+        y2: pad.top + h,
+        class: mk.klasse ?? 'marker-zweit',
+      })
     );
-    svg.appendChild(
-      el('text', { x: sx(marker) + 6, y: pad.top + 12, class: 'marker-label' }, markerLabel)
-    );
+    if (mk.label) {
+      // Nahe am rechten Rand nach links ausrichten, damit nichts abgeschnitten wird.
+      const rechts = sx(mk.x) > pad.left + w - 80;
+      svg.appendChild(
+        el(
+          'text',
+          {
+            x: sx(mk.x) + (rechts ? -6 : 6),
+            y: pad.top + h - 8,
+            class: `${mk.klasse ?? 'marker-zweit'}-label`,
+            'text-anchor': rechts ? 'end' : 'start',
+          },
+          mk.label
+        )
+      );
+    }
   }
 
   for (const r of reihen) {
@@ -107,6 +159,22 @@ export function linienDiagramm(container, punkte, reihen, optionen = {}) {
     const attrs = { d, fill: 'none', stroke: r.farbe, 'stroke-width': 2.4, class: 'linie' };
     if (r.strich) attrs['stroke-dasharray'] = r.strich;
     svg.appendChild(el('path', attrs));
+  }
+
+  for (const pm of punktMarken) {
+    if (pm.x < xMin || pm.x > xMax) continue;
+    const kreis = el('circle', { cx: sx(pm.x), cy: sy(pm.y), r: 5, class: 'punktmarke' });
+    if (pm.titel) kreis.appendChild(el('title', {}, pm.titel));
+    svg.appendChild(kreis);
+  }
+
+  if (marker !== null && marker >= xMin && marker <= xMax) {
+    svg.appendChild(
+      el('line', { x1: sx(marker), x2: sx(marker), y1: pad.top, y2: pad.top + h, class: 'marker' })
+    );
+    svg.appendChild(
+      el('text', { x: sx(marker) + 6, y: pad.top + 12, class: 'marker-label' }, markerLabel)
+    );
   }
 
   if (xLabel)

@@ -4,6 +4,7 @@ import {
   VARIANTEN,
   STANDARD_SZENARIO,
   STANDARD_OPTIONEN,
+  KNICK_HEBESATZ,
 } from '../core/model.js';
 import { rechtsstandTabelle, REFERENZ_TARIF_VZ } from '../core/rates.js';
 import { linienDiagramm, saeulenDiagramm, legende } from './chart.js';
@@ -22,9 +23,20 @@ const STANDARD_DAUER = STANDARD_SZENARIO.bisVz - STANDARD_SZENARIO.vonVz + 1;
 const SENS_VON = 280;
 const SENS_BIS = 600;
 
+/**
+ * Voreinstellung des Vergleichshebesatzes. 500 % liegt deutlich oberhalb des
+ * Knickpunkts des § 35 EStG und damit in dem Bereich, in dem die
+ * Personengesellschaften ihren Vorteil wieder verlieren - der Vergleich zeigt
+ * den Effekt also schon ohne weitere Eingabe.
+ */
+const VERGLEICH_VORGABE = 500;
+
 const felder = {
   hebesatz: $('hebesatz'),
   hebesatzZahl: $('hebesatz-zahl'),
+  optVergleich: $('opt-vergleich'),
+  hebesatzB: $('hebesatz-b'),
+  hebesatzBZahl: $('hebesatz-b-zahl'),
   gewinn: $('gewinn'),
   verguetung: $('verguetung'),
   weitere: $('weitere'),
@@ -47,6 +59,40 @@ const felder = {
 
 let sensMass = 'barwert';
 let letztesErgebnis = null;
+/** Ergebnis des Vergleichshebesatzes oder null, wenn der Vergleich aus ist. */
+let letzterVergleich = null;
+
+/**
+ * Hebesatz der Vergleichsgemeinde oder null, wenn der Vergleich abgeschaltet
+ * ist. Der zweite Hebesatz aendert nur den Hebesatz, nicht die uebrigen
+ * Annahmen; verglichen werden also zwei Gemeinden bei sonst gleichem Szenario.
+ */
+function leseVergleichHebesatz() {
+  if (!felder.optVergleich.checked) return null;
+  const v = Number.parseFloat(felder.hebesatzBZahl.value);
+  return Number.isFinite(v) ? Math.max(0, v) : null;
+}
+
+/** Betragsdifferenz mit explizitem Vorzeichen; "±0 €" bei Gleichstand. */
+const deltaEur = (v) => (Math.abs(v) < 0.5 ? '±0 €' : `${v > 0 ? '+' : '−'}${eur(Math.abs(v))}`);
+
+/**
+ * Rang einer Ausprägung mit Gleichstand. Der Kern vergibt auch bei
+ * betragsgleichen Barwerten verschiedene Raenge; GmbH und optierende
+ * Gesellschaft verlaufen aber unter vielen Annahmen deckungsgleich. Fuer den
+ * Hebesatzvergleich wuerde das einen Rangwechsel vortaeuschen, der nur aus der
+ * Sortierreihenfolge stammt. Gleichstaende erhalten deshalb denselben Rang.
+ */
+function rang(ergebnis, key) {
+  const eigen = ergebnis.varianten[key].barwert;
+  return 1 + VARIANTEN.filter((v) => ergebnis.varianten[v.key].barwert < eigen - 1).length;
+}
+
+/** Differenz in Prozentpunkten mit explizitem Vorzeichen. */
+const deltaPp = (v) =>
+  Math.abs(v) < 0.00005
+    ? '±0,00 pp'
+    : `${v > 0 ? '+' : '−'}${prozent(Math.abs(v)).replace(' %', '')} pp`;
 
 function leseSzenario() {
   const zahl = (feld, fallback) => {
@@ -146,11 +192,14 @@ function zeichneVarianten(ergebnis, kontrolle) {
 
 /* ---------------- Diagramme ---------------- */
 
-function zeichneSensitivitaet(szenario) {
-  // Untersuchungsbereich nach Abschnitt 2.3. Liegt der eingestellte Hebesatz
-  // ausserhalb, wird die Spanne erweitert, damit die Markierung sichtbar bleibt.
-  const von = Math.min(SENS_VON, Math.floor(szenario.hebesatz / 5) * 5);
-  const bis = Math.max(SENS_BIS, Math.ceil(szenario.hebesatz / 5) * 5);
+function zeichneSensitivitaet(szenario, vergleich = null) {
+  // Untersuchungsbereich nach Abschnitt 2.3. Liegt einer der markierten
+  // Hebesaetze ausserhalb, wird die Spanne erweitert, damit beide Markierungen
+  // und der Knickpunkt des § 35 EStG sichtbar bleiben.
+  const markiert = [szenario.hebesatz, KNICK_HEBESATZ];
+  if (vergleich) markiert.push(vergleich.szenario.hebesatz);
+  const von = Math.min(SENS_VON, ...markiert.map((h) => Math.floor(h / 5) * 5));
+  const bis = Math.max(SENS_BIS, ...markiert.map((h) => Math.ceil(h / 5) * 5));
   const { punkte, schnittpunkte } = sensitivitaet(szenario, { von, bis, schritt: 5 });
   const daten = punkte.map((p) => ({
     x: p.hebesatz,
@@ -158,18 +207,6 @@ function zeichneSensitivitaet(szenario) {
   }));
   const reihen = VARIANTEN.map((v) => ({ ...v, label: v.kurz }));
   const eng = ($('chart-sensitivitaet').clientWidth || 760) < 420;
-
-  linienDiagramm($('chart-sensitivitaet'), daten, reihen, {
-    hoehe: 380,
-    xLabel: 'Gewerbesteuerhebesatz in %',
-    yLabel: eng ? '' : sensMass === 'barwert' ? 'Barwert der Gesamtsteuerbelastung' : 'Effektive Steuerbelastung',
-    formatX: (v) => `${Math.round(v)} %`,
-    formatY: sensMass === 'barwert' ? (v) => eur(v) : (v) => prozent(v, 1),
-    formatAchse: sensMass === 'barwert' ? (v) => eurKompakt(v) : (v) => prozent(v, 0),
-    marker: szenario.hebesatz,
-    markerLabel: `${ganz(szenario.hebesatz)} %`,
-  });
-  legende($('legende-sensitivitaet'), VARIANTEN.map((v) => ({ ...v, label: v.label })));
 
   const name = (k) => VARIANTEN.find((v) => v.key === k).kurz;
   const identisch = Math.abs(punkte[0].werte.gmbh.barwert - punkte[0].werte.optierend.barwert) < 1;
@@ -199,6 +236,60 @@ function zeichneSensitivitaet(szenario) {
     return p.werte[key][sensMass];
   };
 
+  // Korridor der insgesamt guenstigsten Personengesellschaftsvariante
+  // gegenueber der GmbH schattieren. Nur dieser eine Korridor, weil mehrere
+  // ueberlagerte Flaechen das Diagramm unlesbar machen.
+  const zonen = [];
+  const korridorPaar = [...paare.values()].find(
+    (p) => p.stellen.length === 2 && (p.a === 'gmbh' || p.b === 'gmbh')
+  );
+  if (korridorPaar) {
+    const stellen = korridorPaar.stellen.slice().sort((x, y) => x - y);
+    const mitte = (stellen[0] + stellen[1]) / 2;
+    const gewinner =
+      wertBei(korridorPaar.a, mitte) < wertBei(korridorPaar.b, mitte)
+        ? korridorPaar.a
+        : korridorPaar.b;
+    zonen.push({
+      von: stellen[0],
+      bis: stellen[1],
+      label: `${name(gewinner)} günstiger`,
+    });
+  }
+
+  // Knickpunkt des § 35 EStG und - falls aktiv - der Vergleichshebesatz.
+  const markierungen = [
+    { x: KNICK_HEBESATZ, label: `${ganz(KNICK_HEBESATZ)} % (§ 35)`, klasse: 'marker-knick' },
+  ];
+  if (vergleich) {
+    markierungen.push({
+      x: vergleich.szenario.hebesatz,
+      label: `${ganz(vergleich.szenario.hebesatz)} %`,
+      klasse: 'marker-zweit',
+    });
+  }
+
+  const punktMarken = relevant.map((s) => ({
+    x: s.hebesatz,
+    y: wertBei(s.a, s.hebesatz),
+    titel: `Rangwechsel ${name(s.a)} / ${name(s.b)} bei rund ${Math.round(s.hebesatz)} %`,
+  }));
+
+  linienDiagramm($('chart-sensitivitaet'), daten, reihen, {
+    hoehe: 380,
+    xLabel: 'Gewerbesteuerhebesatz in %',
+    yLabel: eng ? '' : sensMass === 'barwert' ? 'Barwert der Gesamtsteuerbelastung' : 'Effektive Steuerbelastung',
+    formatX: (v) => `${Math.round(v)} %`,
+    formatY: sensMass === 'barwert' ? (v) => eur(v) : (v) => prozent(v, 1),
+    formatAchse: sensMass === 'barwert' ? (v) => eurKompakt(v) : (v) => prozent(v, 0),
+    marker: szenario.hebesatz,
+    markerLabel: `${ganz(szenario.hebesatz)} %`,
+    zonen,
+    markierungen,
+    punktMarken,
+  });
+  legende($('legende-sensitivitaet'), VARIANTEN.map((v) => ({ ...v, label: v.label })));
+
   const texte = [...paare.values()].map(({ a, b, stellen }) => {
     stellen.sort((x, y) => x - y);
     if (stellen.length === 2) {
@@ -220,11 +311,148 @@ function zeichneSensitivitaet(szenario) {
     ? ' GmbH und optierende Gesellschaft verlaufen unter den eingestellten Annahmen deckungsgleich; die Optionskurve ist deshalb gestrichelt dargestellt.'
     : '';
 
+  // Die Legende der Markierungen gehoert in den Text, weil das Diagramm selbst
+  // nur die Zahlenwerte an den Linien ausweist.
+  const legendeMarker =
+    ` Die durchgezogene senkrechte Linie markiert den eingestellten Hebesatz${
+      vergleich ? ', die gestrichelte den Vergleichshebesatz' : ''
+    }; die gepunktete Linie bei ${ganz(KNICK_HEBESATZ)} % ist der Knickpunkt des § 35 EStG.` +
+    (zonen.length ? ` Der hinterlegte Bereich ist das Vorteilsfenster, die Punkte sind die Rangwechsel.` : '');
+
   $('schnittpunkte').innerHTML =
     (texte.length
-      ? `Rangwechsel im untersuchten Bereich: ${texte.join('; ')}. Die senkrechte Linie markiert den eingestellten Hebesatz.`
+      ? `Rangwechsel im untersuchten Bereich: ${texte.join('; ')}.`
       : 'Im untersuchten Bereich schneiden sich die Belastungskurven nicht; die Rangfolge bleibt vom Hebesatz unberührt.') +
+    legendeMarker +
     deckungsgleich;
+}
+
+/* ---------------- Hebesatzvergleich ---------------- */
+
+/**
+ * Stellt zwei Hebesaetze gegenueber. Verglichen wird dasselbe Szenario allein
+ * mit geaendertem Hebesatz, sodass die Differenz ausschliesslich der Gemeinde
+ * zuzurechnen ist.
+ *
+ * Der Hebesatzeffekt ist je Ausprägung strukturell verschieden: bei der
+ * Kapitalgesellschaft steigt die Belastung linear mit dem Hebesatz, bei den
+ * Personengesellschaften bleibt sie bis 400 % nahezu konstant, weil die
+ * Anrechnung des § 35 EStG die Gewerbesteuer aufzehrt, und steigt erst
+ * darueber. Zwei Stuetzstellen koennen diesen Knick verdecken; die Tabelle
+ * weist deshalb zusaetzlich die mittlere Steigung je 100 Hebesatzpunkte aus.
+ */
+function zeichneVergleich(ergebnis, vergleich) {
+  $('karte-vergleich').hidden = !vergleich;
+  if (!vergleich) return;
+
+  const hA = ergebnis.szenario.hebesatz;
+  const hB = vergleich.szenario.hebesatz;
+  const spanne = (hB - hA) / 100;
+
+  const kopf = `<thead><tr><th>Größe</th>${VARIANTEN.map(
+    (v) => `<th>${v.kurz}</th>`
+  ).join('')}</tr></thead>`;
+
+  const zeile = (label, zellen, klasse = '') =>
+    `<tr${klasse ? ` class="${klasse}"` : ''}><td>${label}</td>${zellen.join('')}</tr>`;
+
+  const je = (fn) => VARIANTEN.map((v) => `<td>${fn(ergebnis.varianten[v.key], vergleich.varianten[v.key])}</td>`);
+
+  /**
+   * Differenzzelle. Eine Mehrbelastung wird rot ausgezeichnet - hier bedeutet
+   * ein positives Vorzeichen also, anders als bei den Posten des Schemas, die
+   * schlechtere Lage.
+   */
+  const jeDelta = (wert, text) =>
+    VARIANTEN.map((v) => {
+      const d = wert(ergebnis.varianten[v.key], vergleich.varianten[v.key]);
+      const klasse = Math.abs(d) < 1e-9 ? 'null-wert' : d > 0 ? 'negativ' : '';
+      return `<td class="${klasse}">${text(d)}</td>`;
+    });
+
+  const zeilen = [
+    zeile(`Barwert bei ${ganz(hA)} %`, je((a) => eur(a.barwert))),
+    zeile(`Barwert bei ${ganz(hB)} %`, je((a, b) => eur(b.barwert))),
+    zeile(
+      'Differenz in EUR',
+      jeDelta((a, b) => b.barwert - a.barwert, deltaEur),
+      'summenzeile'
+    ),
+    zeile(`Effektive Belastung bei ${ganz(hA)} %`, je((a) => prozent(a.effektiv))),
+    zeile(`Effektive Belastung bei ${ganz(hB)} %`, je((a, b) => prozent(b.effektiv))),
+    zeile(
+      'Differenz in Prozentpunkten',
+      jeDelta((a, b) => b.effektiv - a.effektiv, deltaPp),
+      'summenzeile'
+    ),
+    // Die mittlere Steigung macht die unterschiedliche Hebesatzempfindlichkeit
+    // unmittelbar vergleichbar; sie ist nur ausserhalb des Knicks konstant.
+    zeile(
+      'je 100 Hebesatzpunkte',
+      je((a, b) => (Math.abs(spanne) < 1e-9 ? '–' : deltaPp((b.effektiv - a.effektiv) / spanne)))
+    ),
+    zeile(
+      'Rangfolge',
+      VARIANTEN.map((v) => {
+        const rA = rang(ergebnis, v.key);
+        const rB = rang(vergleich, v.key);
+        return `<td>${rA === rB ? `${rA}` : `<b>${rA} → ${rB}</b>`}</td>`;
+      })
+    ),
+  ];
+
+  $('vergleich-tabelle').innerHTML = `${kopf}<tbody>${zeilen.join('')}</tbody>`;
+
+  const besteA = VARIANTEN.filter((v) => rang(ergebnis, v.key) === 1);
+  const besteB = VARIANTEN.filter((v) => rang(vergleich, v.key) === 1);
+  const wechsel = VARIANTEN.filter((v) => rang(ergebnis, v.key) !== rang(vergleich, v.key));
+
+  const liste = (vs) => vs.map((v) => v.label).join(' und ');
+  const gleicheSpitze =
+    besteA.length === besteB.length && besteA.every((v) => besteB.some((w) => w.key === v.key));
+
+  const teile = [];
+  if (Math.abs(hB - hA) < 1e-9) {
+    teile.push('Beide Hebesätze sind gleich; die Differenzen sind daher null.');
+  } else if (!gleicheSpitze) {
+    teile.push(
+      `<b>Rangfolgenwechsel:</b> bei ${ganz(hA)} % ist ${liste(besteA)} günstigste Ausprägung, ` +
+        `bei ${ganz(hB)} % dagegen ${liste(besteB)}. Die Rechtsformwahl kippt also allein durch den Hebesatz.`
+    );
+  } else if (wechsel.length) {
+    teile.push(
+      `Die günstigste Ausprägung bleibt ${liste(besteA)}; die Rangfolge der übrigen verschiebt sich jedoch ` +
+        `(${wechsel.map((v) => `${v.kurz} ${rang(ergebnis, v.key)} → ${rang(vergleich, v.key)}`).join(', ')}).`
+    );
+  } else {
+    teile.push(
+      `Die Rangfolge ist in beiden Gemeinden identisch; ${liste(besteA)} bleibt günstigste Ausprägung.`
+    );
+  }
+
+  // Unterhalb des Mindesthebesatzes rechnet der Kern mit dem angehobenen Wert;
+  // die Spaltenueberschriften zeigen dagegen die Eingabe. Ohne Hinweis waere
+  // die ausgewiesene Differenz nicht nachvollziehbar.
+  const angehoben = [hA, hB].filter((h) => ergebnis.szenario.optionen.mindesthebesatzErzwingen && h < 280);
+  if (angehoben.length) {
+    teile.push(
+      `Für ${angehoben.map((h) => `${ganz(h)} %`).join(' und ')} greift ab EZ 2027 der Mindesthebesatz ` +
+        'von 280 % (§ 16 Abs. 4 S. 2 GewStG); gerechnet wird für diese Perioden mit 280 %, die Differenz ' +
+        'fällt entsprechend geringer aus als die Eingabe vermuten lässt.'
+    );
+  }
+
+  // Der Knick des § 35 EStG liegt genau bei 400 %. Liegt er zwischen den
+  // beiden Stuetzstellen, ist die ausgewiesene mittlere Steigung ein Mischwert.
+  if ((hA - KNICK_HEBESATZ) * (hB - KNICK_HEBESATZ) < 0) {
+    teile.push(
+      `Der Knickpunkt des § 35 EStG bei ${ganz(KNICK_HEBESATZ)} % liegt zwischen den beiden Hebesätzen. ` +
+        'Die Steigung je 100 Punkte ist für die Personengesellschaften deshalb ein Mischwert aus dem ' +
+        'flachen Verlauf unterhalb und dem steilen oberhalb der Grenze; das Diagramm zeigt den Bruch.'
+    );
+  }
+
+  $('vergleich-hinweis').innerHTML = teile.join(' ');
 }
 
 function zeichnePerioden(ergebnis) {
@@ -279,6 +507,14 @@ function zeichnePeriodenTabelle(ergebnis) {
   $('perioden-tabelle').innerHTML = `${kopf}<tbody>${zeilen}${nominal}${barwert}${stundung}${effektiv}</tbody>`;
 }
 
+/**
+ * Vergleichsschluessel einer Postenbeschriftung. Einzelne Posten fuehren den
+ * Hebesatz in der Beschriftung mit ("Gewerbesteuer (Hebesatz 400 %)"); beim
+ * Nebeneinanderstellen zweier Hebesaetze wuerden sich die Zeilen dann nicht
+ * entsprechen - und zwar gerade bei dem Posten, auf den es hier ankommt.
+ */
+const postenSchluessel = (label) => label.replace(/\(Hebesatz[^)]*\)/, '(Hebesatz)');
+
 const EBENEN_LABEL = {
   nachrichtlich: 'Ausgangsgrößen',
   gesellschaft: 'Gesellschaftsebene',
@@ -286,32 +522,70 @@ const EBENEN_LABEL = {
   summe: 'Ergebnis',
 };
 
-function zeichneDetail(ergebnis) {
+function zeichneDetail(ergebnis, vergleich = null) {
   const varianteKey = $('detail-variante').value;
   const periodeIdx = Number.parseInt($('detail-periode').value, 10) || 0;
   const variante = ergebnis.varianten[varianteKey];
   if (!variante) return;
   const periode = variante.perioden[periodeIdx] ?? variante.perioden[0];
 
-  let html = '<thead><tr><th>Position</th><th>Betrag</th><th class="norm">Norm</th></tr></thead><tbody>';
+  // Bei aktivem Hebesatzvergleich werden beide Ermittlungsschemata
+  // nebeneinandergestellt. Die Postenfolge einer Ausprägung ist fest, sodass
+  // sich die Zeilen Position fuer Position entsprechen; zur Sicherheit wird
+  // die Beschriftung abgeglichen.
+  const vPeriode = vergleich
+    ? (vergleich.varianten[varianteKey].perioden[periodeIdx] ??
+      vergleich.varianten[varianteKey].perioden[0])
+    : null;
+  const spalten = vPeriode ? 5 : 3;
+
+  const kopf = vPeriode
+    ? `<thead><tr><th>Position</th><th>${ganz(ergebnis.szenario.hebesatz)} %</th><th>${ganz(
+        vergleich.szenario.hebesatz
+      )} %</th><th>Differenz</th><th class="norm">Norm</th></tr></thead>`
+    : '<thead><tr><th>Position</th><th>Betrag</th><th class="norm">Norm</th></tr></thead>';
+
+  let html = `${kopf}<tbody>`;
   let letzteEbene = null;
-  for (const p of periode.posten) {
+  periode.posten.forEach((p, i) => {
     if (p.ebene !== letzteEbene) {
-      html += `<tr class="ebene"><td colspan="3">${EBENEN_LABEL[p.ebene] ?? p.ebene}</td></tr>`;
+      html += `<tr class="ebene"><td colspan="${spalten}">${EBENEN_LABEL[p.ebene] ?? p.ebene}</td></tr>`;
       letzteEbene = p.ebene;
     }
     const klassen = [];
     if (p.betrag < -0.005) klassen.push('negativ');
     if (Math.abs(p.betrag) < 0.005) klassen.push('null-wert');
-    html += `<tr${p.ebene === 'summe' ? ' class="summenzeile"' : ''}><td>${p.label}</td><td class="${klassen.join(
+    // Im Vergleich traegt die Spaltenueberschrift den Hebesatz; in der
+    // Beschriftung waere er irrefuehrend, weil dort zwei Werte stehen.
+    const label = vPeriode ? p.label.replace(/\s*\(Hebesatz[^)]*\)/, '') : p.label;
+    html += `<tr${p.ebene === 'summe' ? ' class="summenzeile"' : ''}><td>${label}</td><td class="${klassen.join(
       ' '
-    )}">${eurExakt(p.betrag)}</td><td class="norm">${p.norm ?? ''}</td></tr>`;
-  }
+    )}">${eurExakt(p.betrag)}</td>`;
+    if (vPeriode) {
+      const q = vPeriode.posten[i];
+      const passt = q && postenSchluessel(q.label) === postenSchluessel(p.label);
+      const d = passt ? q.betrag - p.betrag : 0;
+      html += `<td class="${passt && Math.abs(q.betrag) < 0.005 ? 'null-wert' : ''}">${
+        passt ? eurExakt(q.betrag) : '–'
+      }</td><td class="${Math.abs(d) < 0.005 ? 'null-wert' : ''}">${passt ? deltaEur(d) : '–'}</td>`;
+    }
+    html += `<td class="norm">${p.norm ?? ''}</td></tr>`;
+  });
   html += '</tbody>';
   $('detail-tabelle').innerHTML = html;
 
   const hinweise = $('detail-hinweise');
-  hinweise.innerHTML = periode.hinweise.map((h) => `<li>${h}</li>`).join('');
+  // Hinweise, die nur bei einem der beiden Hebesaetze auftreten, werden
+  // gekennzeichnet - sie sind gerade der interessante Teil des Vergleichs.
+  const eintraege = periode.hinweise.map((h) => `<li>${h}</li>`);
+  if (vPeriode) {
+    for (const h of vPeriode.hinweise) {
+      if (!periode.hinweise.includes(h)) {
+        eintraege.push(`<li><em>nur bei ${ganz(vergleich.szenario.hebesatz)} %:</em> ${h}</li>`);
+      }
+    }
+  }
+  hinweise.innerHTML = eintraege.join('');
 }
 
 function fuelleDetailAuswahl(ergebnis) {
@@ -381,6 +655,45 @@ function csvExport() {
     ['Effektive Belastung in %', ...VARIANTEN.map((v) => csvZahl(e.varianten[v.key].effektiv * 100))].join(';')
   );
 
+  // Hebesatzvergleich nur exportieren, wenn er auch angezeigt wird.
+  if (letzterVergleich) {
+    const hB = letzterVergleich.szenario.hebesatz;
+    zeilen.push('');
+    zeilen.push(`Hebesatzvergleich;${csvZahl(s.hebesatz)};gegen;${csvZahl(hB)}`);
+    zeilen.push(['Groesse', ...VARIANTEN.map((v) => v.kurz)].join(';'));
+    zeilen.push(
+      [`Barwert bei ${Math.round(s.hebesatz)} %`, ...VARIANTEN.map((v) => csvZahl(e.varianten[v.key].barwert))].join(';')
+    );
+    zeilen.push(
+      [
+        `Barwert bei ${Math.round(hB)} %`,
+        ...VARIANTEN.map((v) => csvZahl(letzterVergleich.varianten[v.key].barwert)),
+      ].join(';')
+    );
+    zeilen.push(
+      [
+        'Differenz in EUR',
+        ...VARIANTEN.map((v) => csvZahl(letzterVergleich.varianten[v.key].barwert - e.varianten[v.key].barwert)),
+      ].join(';')
+    );
+    zeilen.push(
+      [
+        'Differenz in Prozentpunkten',
+        ...VARIANTEN.map((v) =>
+          csvZahl((letzterVergleich.varianten[v.key].effektiv - e.varianten[v.key].effektiv) * 100)
+        ),
+      ].join(';')
+    );
+    zeilen.push(
+      [
+        'Rang vorher/nachher',
+        // Dieselbe Rangbildung wie in der Tabelle: Gleichstaende teilen sich
+        // einen Rang, damit die Sortierreihenfolge keinen Wechsel vortaeuscht.
+        ...VARIANTEN.map((v) => `${rang(e, v.key)}/${rang(letzterVergleich, v.key)}`),
+      ].join(';')
+    );
+  }
+
   const blob = new Blob(['﻿' + zeilen.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -401,7 +714,7 @@ function aktualisiereHebesatzHinweis(szenario) {
   } else {
     el.className = 'hinweis';
     el.textContent =
-      'Das Vierfache des Messbetrags nach § 35 EStG entspricht rechnerisch einem Hebesatz von 400 %; oberhalb entsteht bei Personengesellschaften ein Anrechnungsüberhang. Der gewogene Bundesdurchschnitt liegt bei rund 400 % und fällt damit nahezu mit dieser Grenze zusammen.';
+      'Das Vierfache des Messbetrags nach § 35 EStG entspricht rechnerisch einem Hebesatz von 400 %. Unterhalb verfällt Anrechnungsvolumen mangels dahinterstehender Gewerbesteuer, weil der Abzug auf die gezahlte Gewerbesteuer begrenzt ist (§ 35 Abs. 1 S. 5 EStG); oberhalb bleibt die überschießende Gewerbesteuer endgültige Belastung. Der Ermäßigungshöchstbetrag (§ 35 Abs. 1 S. 2 EStG) wirkt daneben und hebesatzunabhängig: bindet er, bleibt auch unterhalb von 400 % Gewerbesteuer endgültig. Der gewogene Bundesdurchschnitt liegt bei rund 400 % und fällt damit nahezu mit dieser Grenze zusammen.';
   }
 }
 
@@ -440,6 +753,11 @@ function rechne() {
   const ergebnis = berechne(szenario);
   letztesErgebnis = ergebnis;
 
+  // Zweiter Hebesatz bei sonst unveraendertem Szenario.
+  const hebesatzB = leseVergleichHebesatz();
+  const vergleich = hebesatzB === null ? null : berechne({ ...szenario, hebesatz: hebesatzB });
+  letzterVergleich = vergleich;
+
   const kontrolle = felder.optKontrolle.checked ? berechne({ ...szenario, verguetung: 0 }) : null;
   $('kontroll-hinweis').hidden = !kontrolle;
   if (kontrolle) {
@@ -450,12 +768,19 @@ function rechne() {
   aktualisiereHebesatzHinweis(ergebnis.szenario);
   aktualisiereZeitraumHinweis(ergebnis.szenario);
   zeichneVarianten(ergebnis, kontrolle);
-  zeichneSensitivitaet(szenario);
+  zeichneSensitivitaet(szenario, vergleich);
+  zeichneVergleich(ergebnis, vergleich);
   zeichnePerioden(ergebnis);
   zeichnePeriodenTabelle(ergebnis);
   fuelleDetailAuswahl(ergebnis);
-  zeichneDetail(ergebnis);
+  zeichneDetail(ergebnis, vergleich);
   zeichneRechtsstand(ergebnis);
+}
+
+/** Blendet die Eingabe des zweiten Hebesatzes und die Vergleichskarte ein. */
+function aktualisiereVergleich() {
+  $('vergleich-zeile').hidden = !felder.optVergleich.checked;
+  rechne();
 }
 
 function koppleSlider(slider, zahl) {
@@ -477,6 +802,10 @@ function setzeZurueck() {
   felder.weitere.value = s.weitereEinkuenfte;
   felder.hebesatz.value = s.hebesatz;
   felder.hebesatzZahl.value = s.hebesatz;
+  felder.optVergleich.checked = false;
+  felder.hebesatzB.value = VERGLEICH_VORGABE;
+  felder.hebesatzBZahl.value = VERGLEICH_VORGABE;
+  $('vergleich-zeile').hidden = true;
   const entnahme = (1 - s.thesaurierungsquote) * 100;
   felder.entnahme.value = entnahme;
   felder.entnahmeZahl.value = entnahme;
@@ -498,6 +827,7 @@ function setzeZurueck() {
 }
 
 koppleSlider(felder.hebesatz, felder.hebesatzZahl);
+koppleSlider(felder.hebesatzB, felder.hebesatzBZahl);
 koppleSlider(felder.entnahme, felder.entnahmeZahl);
 [
   felder.gewinn,
@@ -519,6 +849,9 @@ koppleSlider(felder.entnahme, felder.entnahmeZahl);
 felder.optTev.addEventListener('input', aktualisiereWahlrechte);
 aktualisiereWahlrechte();
 
+felder.optVergleich.addEventListener('input', aktualisiereVergleich);
+$('vergleich-zeile').hidden = !felder.optVergleich.checked;
+
 $('dauer-schnellwahl').addEventListener('click', (ev) => {
   const btn = ev.target.closest('button[data-dauer]');
   if (!btn) return;
@@ -526,15 +859,15 @@ $('dauer-schnellwahl').addEventListener('click', (ev) => {
   rechne();
 });
 
-$('detail-variante').addEventListener('change', () => zeichneDetail(letztesErgebnis));
-$('detail-periode').addEventListener('change', () => zeichneDetail(letztesErgebnis));
+$('detail-variante').addEventListener('change', () => zeichneDetail(letztesErgebnis, letzterVergleich));
+$('detail-periode').addEventListener('change', () => zeichneDetail(letztesErgebnis, letzterVergleich));
 
 document.querySelectorAll('.segment').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.segment').forEach((b) => b.classList.remove('aktiv'));
     btn.classList.add('aktiv');
     sensMass = btn.dataset.mass;
-    zeichneSensitivitaet(leseSzenario());
+    zeichneSensitivitaet(leseSzenario(), letzterVergleich);
   });
 });
 
@@ -547,7 +880,7 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     if (letztesErgebnis) {
-      zeichneSensitivitaet(letztesErgebnis.szenario);
+      zeichneSensitivitaet(letztesErgebnis.szenario, letzterVergleich);
       zeichnePerioden(letztesErgebnis);
     }
   }, 150);

@@ -123,7 +123,74 @@ function sockel(szenario) {
 }
 
 /**
- * Ermaessigungshoechstbetrag nach § 35 Abs. 1 S. 5 EStG.
+ * Hebesatz, bei dem das Anrechnungsvolumen des § 35 EStG die gezahlte
+ * Gewerbesteuer genau deckt.
+ *
+ * Aus 4 x Messbetrag = Messbetrag x h/100 folgt h = 400 % - unabhaengig von
+ * Gewinn, Freibetrag und Vergütung. Unterhalb dieses Werts verfaellt
+ * Anrechnungsvolumen mangels dahinterstehender Gewerbesteuer, oberhalb bleibt
+ * die ueberschiessende Gewerbesteuer endgueltige Belastung. Die Belastungskurve
+ * der Personengesellschaften hat hier deshalb einen Knick.
+ *
+ * Der Ermaessigungshoechstbetrag des § 35 Abs. 1 S. 2 EStG wirkt daneben und
+ * hebesatzunabhaengig; bindet er, bleibt auch unterhalb von 400 % Gewerbesteuer
+ * endgueltig. Der Knick verschiebt sich dadurch nicht, die Kurve verlaeuft
+ * lediglich insgesamt hoeher.
+ */
+export const KNICK_HEBESATZ = KONSTANTEN.anrechnungsfaktor35 * 100;
+
+/** Betrag im deutschen Format fuer die Hinweistexte. */
+function eurText(v) {
+  return `${v.toFixed(2).replace('.', ',')} EUR`;
+}
+
+/**
+ * Hinweise zu den Grenzen des § 35 EStG.
+ *
+ * Die beiden ausgewiesenen Groessen ueberschneiden sich, wenn der
+ * Ermaessigungshoechstbetrag bindet: der davon blockierte Teil ist sowohl
+ * ungenutztes Anrechnungsvolumen als auch nicht angerechnete Gewerbesteuer.
+ * Die Hinweise benennen deshalb die Ursachen einzeln mit Betrag, statt eine
+ * Zuordnung zum Hebesatzbereich zu behaupten, die nur dann zutrifft, wenn der
+ * Hoechstbetrag nicht bindet.
+ */
+function hinweise35(erm) {
+  const texte = [];
+  if (erm.ueberhang > EPS || erm.nichtAngerechneteGewSt > EPS) {
+    const teile = [];
+    if (erm.ohneGewSt > EPS) {
+      teile.push(
+        `${eurText(erm.ohneGewSt)} Anrechnungsvolumen ohne dahinterstehende Gewerbesteuer ` +
+          '(Hebesatz unter 400 %, § 35 Abs. 1 S. 5 EStG)'
+      );
+    }
+    if (erm.ueberVolumen > EPS) {
+      teile.push(
+        `${eurText(erm.ueberVolumen)} Gewerbesteuer über dem Volumen von 4 × Messbetrag ` +
+          '(Hebesatz über 400 %, § 35 Abs. 1 S. 1 Nr. 1 EStG)'
+      );
+    }
+    if (erm.durchHoechstbetrag > EPS) {
+      teile.push(
+        `${eurText(erm.durchHoechstbetrag)} durch den Ermäßigungshöchstbetrag blockiert ` +
+          '(§ 35 Abs. 1 S. 2 EStG)'
+      );
+    }
+    texte.push(`Grenzen des § 35 EStG: ${teile.join('; ')}.`);
+  }
+  if (erm.durchHoechstbetrag > EPS) {
+    texte.push(
+      `Endgültige Mehrbelastung aus der Gewerbesteuer: ${eurText(erm.nichtAngerechneteGewSt)}. ` +
+        `Davon entfallen ${eurText(erm.durchHoechstbetrag)} auf den Ermäßigungshöchstbetrag; ` +
+        'dieser Teil ist zugleich im ungenutzten Anrechnungsvolumen enthalten. Beide Posten ' +
+        'dürfen deshalb nicht addiert werden.'
+    );
+  }
+  return texte;
+}
+
+/**
+ * Ermaessigungshoechstbetrag nach § 35 Abs. 1 S. 2 EStG.
  *
  * Die Anrechnung ist auf den Anteil der gewerblichen Einkuenfte an der Summe
  * der Einkuenfte begrenzt. Ohne weitere Einkuenfte betraegt der Quotient 1,
@@ -169,7 +236,7 @@ function periodePersG(vz, szenario, state, istSchluss) {
   const hb = hoechstbetrag35(estGesamt, G, szenario);
   const erm = ermaessigung35(gew.messbetrag, gew.steuer, hb.betrag);
 
-  // Die Quotelung des § 35 Abs. 1 S. 5 EStG stellt sicher, dass die Anrechnung
+  // Die Quotelung des § 35 Abs. 1 S. 2 EStG stellt sicher, dass die Anrechnung
   // die auf den Gewinn entfallende Steuer nie uebersteigt: wegen der Progression
   // ist ESt(W) <= ESt(W+G) * W/(W+G), also hb <= estGesamt - estSockel.
   const estFestgesetztGesamt = Math.max(0, estGesamt - erm.anrechnung);
@@ -205,9 +272,25 @@ function periodePersG(vz, szenario, state, istSchluss) {
       posten('zu versteuerndes Einkommen', zvE, '§ 2 Abs. 5 EStG', 'gesellschafter'),
       posten('tarifliche Einkommensteuer', estTariflich, '§ 32a EStG', 'gesellschafter'),
       posten('Anrechnungsvolumen (4 × Messbetrag)', erm.anrechnungsvolumen, '§ 35 Abs. 1 EStG', 'gesellschafter'),
-      posten('Ermäßigungshöchstbetrag', erm.ermaessigungshoechstbetrag, '§ 35 Abs. 1 S. 5 EStG', 'gesellschafter'),
-      posten('./. Steuerermäßigung', -erm.anrechnung, '§ 35 Abs. 1 EStG', 'gesellschafter'),
-      posten('Anrechnungsüberhang (verfällt)', erm.ueberhang, '§ 35 EStG - kein Vor-/Rücktrag', 'gesellschafter'),
+      posten('Ermäßigungshöchstbetrag', erm.ermaessigungshoechstbetrag, '§ 35 Abs. 1 S. 2 EStG', 'gesellschafter'),
+      posten('./. Steuerermäßigung', -erm.anrechnung || 0, '§ 35 Abs. 1 EStG', 'gesellschafter'),
+      // Gezahlte Gewerbesteuer, die keine Ermaessigung ausgeloest hat. Oberhalb
+      // von 400 % traegt dieser Posten den gesamten Hebesatzeffekt; er kann
+      // aber auch unterhalb auftreten, wenn der Hoechstbetrag bindet.
+      posten(
+        'nicht angerechnete Gewerbesteuer',
+        erm.nichtAngerechneteGewSt,
+        '§ 35 Abs. 1 EStG',
+        'gesellschafter'
+      ),
+      // Nachrichtlich, weil dieser Posten den vom Hoechstbetrag blockierten
+      // Teil mit dem vorstehenden teilt: beide duerfen nicht addiert werden.
+      posten(
+        'nachrichtlich: ungenutztes Anrechnungsvolumen (verfällt)',
+        erm.ueberhang,
+        '§ 35 EStG - kein Vor-/Rücktrag',
+        'gesellschafter'
+      ),
       posten('festzusetzende Einkommensteuer', estFestgesetzt, '§ 2 Abs. 6 EStG', 'gesellschafter'),
       posten('Solidaritätszuschlag', solz, '§ 4 SolZG', 'gesellschafter'),
       posten('Gesamtbelastung der Periode', gesamt, null, 'summe'),
@@ -217,11 +300,11 @@ function periodePersG(vz, szenario, state, istSchluss) {
         ? [
             'Weitere Einkünfte als Sockel: ausgewiesen ist die Steuer, die durch das Hinzutreten ' +
               'des Gewinns entsteht. Der Ermäßigungshöchstbetrag des § 35 EStG ist nach ' +
-              `§ 35 Abs. 1 S. 5 EStG auf ${(hb.anteil * 100).toFixed(1).replace('.', ',')} % ` +
+              `§ 35 Abs. 1 S. 2 EStG auf ${(hb.anteil * 100).toFixed(1).replace('.', ',')} % ` +
               'gekürzt (Anteil der gewerblichen Einkünfte an der Summe der Einkünfte).',
           ]
         : []),
-      ...(erm.ueberhang > EPS ? [`Anrechnungsüberhang: ${erm.ueberhangUrsache}`] : []),
+      ...hinweise35(erm),
     ],
     zustand: { ...state },
   };
@@ -272,8 +355,41 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
   const est34a = rs.thesaurierung34a * B;
   const solz34a = solzPauschal(est34a);
 
-  // Nach Auffassung der Finanzverwaltung gehen die Steuer auf den beguenstigten
-  // Gewinn und die Nachsteuer in den Ermaessigungshoechstbetrag ein.
+  /*
+   * Bemessungsgrundlage des Ermaessigungshoechstbetrags (§ 35 Abs. 1 S. 2 EStG).
+   *
+   * Einbezogen wird die Steuer auf den beguenstigten Gewinn nach § 34a Abs. 1
+   * EStG - so die Auffassung der Finanzverwaltung, der die Arbeit folgt. Der
+   * beguenstigte Gewinn ist eine gewerbliche Einkunft des Veranlagungszeitraums
+   * und im zu versteuernden Einkommen enthalten; § 34a Abs. 1 EStG aendert nur
+   * den Steuersatz. Er steht damit im Zaehler und im Nenner des Quotienten des
+   * S. 2, sodass die darauf entfallende Steuer dort auch im Multiplikator stehen
+   * muss. Die Gegenauffassung ist ueber die Option abschaltbar.
+   *
+   * Die Nachsteuer des § 34a Abs. 4 EStG bleibt dagegen in BEIDEN Varianten
+   * ausser Ansatz, und zwar aus drei Gruenden:
+   *   - Wortlaut: § 35 Abs. 1 S. 1 EStG ermaessigt die tarifliche Steuer nur,
+   *     "soweit sie anteilig auf im zu versteuernden Einkommen enthaltene
+   *     gewerbliche Einkuenfte entfaellt". Der Nachversteuerungsbetrag ist keine
+   *     Einkunft und nicht Teil des zvE; § 34a Abs. 4 S. 2 EStG besteuert ihn
+   *     mit einem eigenen Satz von 25 %.
+   *   - Systematik: er steht deshalb weder in der "Summe der positiven
+   *     gewerblichen Einkuenfte" noch in der "Summe aller positiven Einkuenfte"
+   *     des S. 2. Eine Steuer in den Multiplikator aufzunehmen, deren
+   *     Bemessungsgrundlage in der Quote fehlt, zerstoert die Proportionalitaet,
+   *     die die Vorschrift herstellen will. Die Parallele ist die
+   *     Abgeltungsteuer: auch sie bleibt aussen vor, und S. 4 nennt mit § 32d
+   *     Abs. 6 S. 2 EStG gerade nur den Fall, in dem die Kapitalerkuenfte in das
+   *     zvE zurueckkehren.
+   *   - Periodenbezug: § 35 Abs. 1 S. 1 Nr. 1 EStG knuepft an den Messbetrag des
+   *     dem Veranlagungszeitraum entsprechenden Erhebungszeitraums. Die
+   *     Nachsteuer trifft Gewinne frueherer Jahre, deren Messbetraege dort
+   *     bereits ihr eigenes Anrechnungsvolumen erzeugt haben. Sie hier
+   *     einzubeziehen, oeffnete einen periodenuebergreifenden Transfer, den § 35
+   *     EStG mit dem Verbot des Vor- und Ruecktrags gerade ausschliesst.
+   * Die Wirkung ist erheblich: bindet der Hoechstbetrag, kippt die Anrechnung
+   * vollstaendig (Kontrollfall "Nachsteuer erhoeht den Hoechstbetrag nicht").
+   */
   const hbBasis = szenario.optionen.est34aImHoechstbetrag
     ? estGesamtTariflich + est34a
     : estGesamtTariflich;
@@ -335,9 +451,23 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
         '§ 34a Abs. 1 EStG',
         'gesellschafter'
       ),
-      posten('Ermäßigungshöchstbetrag', erm.ermaessigungshoechstbetrag, '§ 35 Abs. 1 S. 5 EStG', 'gesellschafter'),
-      posten('./. Steuerermäßigung', -erm.anrechnung, '§ 35 Abs. 1 EStG', 'gesellschafter'),
-      posten('Anrechnungsüberhang (verfällt)', erm.ueberhang, '§ 35 EStG', 'gesellschafter'),
+      posten('Anrechnungsvolumen (4 × Messbetrag)', erm.anrechnungsvolumen, '§ 35 Abs. 1 EStG', 'gesellschafter'),
+      posten('Ermäßigungshöchstbetrag', erm.ermaessigungshoechstbetrag, '§ 35 Abs. 1 S. 2 EStG', 'gesellschafter'),
+      posten('./. Steuerermäßigung', -erm.anrechnung || 0, '§ 35 Abs. 1 EStG', 'gesellschafter'),
+      posten(
+        'nicht angerechnete Gewerbesteuer',
+        erm.nichtAngerechneteGewSt,
+        '§ 35 Abs. 1 EStG',
+        'gesellschafter'
+      ),
+      // Nachrichtlich: teilt den vom Hoechstbetrag blockierten Teil mit dem
+      // vorstehenden Posten, darf also nicht hinzuaddiert werden.
+      posten(
+        'nachrichtlich: ungenutztes Anrechnungsvolumen (verfällt)',
+        erm.ueberhang,
+        '§ 35 EStG',
+        'gesellschafter'
+      ),
       posten('festzusetzende Einkommensteuer', estFestgesetzt, '§ 2 Abs. 6 EStG', 'gesellschafter'),
       posten('Solidaritätszuschlag', solz, '§ 4 SolZG', 'gesellschafter'),
       posten('Nachversteuerungsbetrag', nvGesamt, '§ 34a Abs. 4 EStG', 'gesellschafter'),
@@ -351,12 +481,12 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
         ? [
             'Weitere Einkünfte als Sockel: sie heben den Tarif auf dem regelbesteuerten ' +
               'Gewinnanteil, lassen den Sondertarif des § 34a Abs. 1 EStG aber unberührt. ' +
-              `Ermäßigungshöchstbetrag nach § 35 Abs. 1 S. 5 EStG auf ${(hb.anteil * 100)
+              `Ermäßigungshöchstbetrag nach § 35 Abs. 1 S. 2 EStG auf ${(hb.anteil * 100)
                 .toFixed(1)
                 .replace('.', ',')} % gekürzt.`,
           ]
         : []),
-      ...(erm.ueberhang > EPS ? [`Anrechnungsüberhang: ${erm.ueberhangUrsache}`] : []),
+      ...hinweise35(erm),
       ...(schlussNachversteuerung > EPS
         ? ['Schlussperiode: vollständige Entnahme, Nachversteuerung des Restbestands.']
         : []),

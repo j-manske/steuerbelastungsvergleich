@@ -39,6 +39,21 @@
             </div>
             <p class="hinweis" id="hebesatz-hinweis"></p>
           </div>
+          <div class="feld">
+            <label class="schalter">
+              <input type="checkbox" id="opt-vergleich" />
+              <span>Zweiten Hebesatz vergleichen
+                <em>Stellt dem eingestellten Hebesatz einen zweiten gegenüber — etwa zwei
+                  Gemeinden — und weist die Differenz je Ausprägung aus.</em></span>
+            </label>
+            <div class="slider-zeile" id="vergleich-zeile" hidden>
+              <input id="hebesatz-b" type="range" min="280" max="600" step="5" value="500" />
+              <div class="zahl-eingabe">
+                <input id="hebesatz-b-zahl" type="number" min="0" max="1200" step="5" value="500" />
+                <span>%</span>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="karte">
@@ -71,7 +86,7 @@
               Sockelbetrag, der allein den Grenzsteuersatz bestimmt (§ 2 Abs. 3 EStG). Die auf ihn
               selbst entfallende Steuer wird herausgerechnet; ausgewiesen ist stets nur die Steuer,
               die durch das Hinzutreten des Gewinns entsteht. Der Ermäßigungshöchstbetrag des § 35
-              EStG wird nach § 35 Abs. 1 S. 5 EStG entsprechend gekürzt. Voreinstellung 0 nach
+              EStG wird nach § 35 Abs. 1 S. 2 EStG entsprechend gekürzt. Voreinstellung 0 nach
               Tabelle 2 der Arbeit.
             </p>
           </div>
@@ -149,8 +164,10 @@
               >§ 34a-Steuer im Ermäßigungshöchstbetrag
               <em
                 >Standard an: Auffassung der Finanzverwaltung, wonach die Steuer auf den begünstigten
-                Gewinn und die Nachsteuer in den Höchstbetrag des § 35 EStG eingehen. Aus:
-                Gegenauffassung, der Sondertarif mindert dann das nutzbare Anrechnungsvolumen.</em
+                Gewinn (§ 34a Abs. 1 EStG) in den Höchstbetrag des § 35 EStG eingeht. Aus:
+                Gegenauffassung, der Sondertarif mindert dann das nutzbare Anrechnungsvolumen. Die
+                Nachsteuer des § 34a Abs. 4 EStG bleibt in beiden Fällen außer Ansatz, weil der
+                Nachversteuerungsbetrag nicht im zu versteuernden Einkommen enthalten ist.</em
               ></span
             >
           </label>
@@ -235,6 +252,14 @@
           <p class="fussnote" id="schnittpunkte"></p>
         </section>
 
+        <section class="karte" id="karte-vergleich" hidden>
+          <h2>Hebesatzvergleich</h2>
+          <div class="tabelle-scroll">
+            <table id="vergleich-tabelle" class="tabelle"></table>
+          </div>
+          <p class="fussnote" id="vergleich-hinweis"></p>
+        </section>
+
         <section class="karte">
           <h2>Steuerbelastung je Periode</h2>
           <div id="chart-perioden"></div>
@@ -287,12 +312,12 @@
           </thead>
           <tbody>
             <tr><td>Gesellschafter</td><td>eine unbeschränkt steuerpflichtige natürliche Person, keine Kirchensteuer. Weitere tarifliche Einkünfte sind voreingestellt 0; über das Feld „Weitere tarifliche Einkünfte" lassen sie sich als Sockelbetrag zuschalten, der allein den Grenzsteuersatz kalibriert <span class="kap">2.1.1</span></td></tr>
-            <tr><td>Sockelbetrag</td><td>in jede Tarifberechnung geht <em>W</em> + <em>X</em> ein, zugerechnet wird nur ESt(<em>W</em> + <em>X</em>) − ESt(<em>W</em>) und entsprechend beim SolZ. Vergleichsmaßstab bleibt damit allein die Belastung des Betriebsergebnisses; der Ermäßigungshöchstbetrag wird nach § 35 Abs. 1 S. 5 EStG anteilig gekürzt <span class="kap">2.1.1</span></td></tr>
+            <tr><td>Sockelbetrag</td><td>in jede Tarifberechnung geht <em>W</em> + <em>X</em> ein, zugerechnet wird nur ESt(<em>W</em> + <em>X</em>) − ESt(<em>W</em>) und entsprechend beim SolZ. Vergleichsmaßstab bleibt damit allein die Belastung des Betriebsergebnisses; der Ermäßigungshöchstbetrag wird nach § 35 Abs. 1 S. 2 EStG anteilig gekürzt <span class="kap">2.1.1</span></td></tr>
             <tr><td>Gewinn vor Steuern</td><td>konstant über alle sieben Perioden <span class="kap">2.2</span></td></tr>
             <tr><td>Hinzurechnungen / Kürzungen</td><td>keine; Gewerbeertrag = Gewinn vor Steuern <span class="kap">2.1.1</span></td></tr>
             <tr><td>Tätigkeitsvergütung</td><td>betragsgleich in allen Ausprägungen, fremdüblich. Bei der Personengesellschaft Sondervergütung nach § 15 Abs. 1 S. 1 Nr. 2 EStG i.V.m. § 7 GewStG, bei GmbH und optierender Gesellschaft abziehbare Betriebsausgabe <span class="kap">2.2</span></td></tr>
             <tr><td>Sonderbetriebsvermögen</td><td>nicht vorhanden <span class="kap">2.1.1</span></td></tr>
-            <tr><td>Anrechnung § 35 EStG</td><td>ein Betrieb, keine Quotelung, kein Vor- oder Rücktrag von Überhängen, Thesaurierungs- und Nachsteuer im Höchstbetrag <span class="kap">2.1.1</span></td></tr>
+            <tr><td>Anrechnung § 35 EStG</td><td>ein Betrieb, keine Quotelung, kein Vor- oder Rücktrag von Überhängen. Die Thesaurierungssteuer des § 34a Abs. 1 EStG geht in den Ermäßigungshöchstbetrag ein (abschaltbar), die Nachsteuer des § 34a Abs. 4 EStG nicht: ihre Bemessungsgrundlage ist kein Bestandteil des zu versteuernden Einkommens und steht daher in keiner der beiden Summen des § 35 Abs. 1 S. 2 EStG <span class="kap">2.1.1</span></td></tr>
             <tr><td>§ 34a EStG</td><td>Antragsvoraussetzungen erfüllt (Gewinnanteil über 10 % oder über 10.000 EUR), keine Tatbestände des Abs. 6, Steuern werden zusätzlich zu Vergütung und Entnahmen entnommen <span class="kap">2.1.1</span></td></tr>
             <tr><td>Ausschüttungsbesteuerung</td><td>im Grundfall Abgeltungsteuer, kein Sparer-Pauschbetrag. Teileinkünfteverfahren und Günstigerprüfung sind unter „Modellvarianten“ zuschaltbar; das Teileinkünfteverfahren wäre erst unterhalb eines Grenzsteuersatzes von rund 41,7 % vorteilhaft, die Günstigerprüfung erst bei einem Durchschnittssteuersatz auf die Ausschüttung unter 26,375 % und damit praktisch nur bei übrigen Einkünften unter rund 24.750 EUR <span class="kap">2.1.2</span></td></tr>
             <tr><td>Optierende Gesellschaft</td><td>nicht entnahmefähiges Gesellschafterkonto; Übergang und Rückoption nicht abgebildet <span class="kap">2.1.3</span></td></tr>
