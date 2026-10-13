@@ -58,7 +58,7 @@ export const STANDARD_OPTIONEN = {
    *  Gesellschafterkonto - Thesaurierung dann nicht moeglich. */
   ausschuettungsfiktion1a: false,
   /** Antrag auf Teileinkuenfteverfahren (§ 32d Abs. 2 Nr. 3 EStG) statt des
-   *  gesonderten Tarifs. Standard: nein (Tabelle 2 der Arbeit). */
+   *  gesonderten Tarifs. Standard: nein (Tabelle 1 der Arbeit). */
   teileinkuenfte: false,
   /** Guenstigerpruefung nach § 32d Abs. 6 EStG. Standard: nein. */
   guenstigerpruefung: false,
@@ -80,7 +80,7 @@ export const STANDARD_SZENARIO = {
   verguetung: 100000,
   /**
    * Weitere tarifliche Einkuenfte des Gesellschafters (Sockelbetrag).
-   * Voreinstellung 0 nach Tabelle 2 der Arbeit: keine weiteren Einkuenfte.
+   * Voreinstellung 0 nach Tabelle 1 der Arbeit: keine weiteren Einkuenfte.
    */
   weitereEinkuenfte: 0,
   /** Entnahme- bzw. Ausschuettungsquote 50 % (Abschnitt 3.1). */
@@ -356,53 +356,15 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
   const solz34a = solzPauschal(est34a);
 
   /*
-   * Bemessungsgrundlage des Ermaessigungshoechstbetrags (§ 35 Abs. 1 S. 2 EStG).
+   * Nachversteuerung (§ 34a Abs. 4 EStG): laufender Entnahmeueberhang gegen den
+   * zum Ende des Vorjahres festgestellten nachversteuerungspflichtigen Betrag.
    *
-   * Einbezogen wird die Steuer auf den beguenstigten Gewinn nach § 34a Abs. 1
-   * EStG - so die Auffassung der Finanzverwaltung, der die Arbeit folgt. Der
-   * beguenstigte Gewinn ist eine gewerbliche Einkunft des Veranlagungszeitraums
-   * und im zu versteuernden Einkommen enthalten; § 34a Abs. 1 EStG aendert nur
-   * den Steuersatz. Er steht damit im Zaehler und im Nenner des Quotienten des
-   * S. 2, sodass die darauf entfallende Steuer dort auch im Multiplikator stehen
-   * muss. Die Gegenauffassung ist ueber die Option abschaltbar.
-   *
-   * Die Nachsteuer des § 34a Abs. 4 EStG bleibt dagegen in BEIDEN Varianten
-   * ausser Ansatz, und zwar aus drei Gruenden:
-   *   - Wortlaut: § 35 Abs. 1 S. 1 EStG ermaessigt die tarifliche Steuer nur,
-   *     "soweit sie anteilig auf im zu versteuernden Einkommen enthaltene
-   *     gewerbliche Einkuenfte entfaellt". Der Nachversteuerungsbetrag ist keine
-   *     Einkunft und nicht Teil des zvE; § 34a Abs. 4 S. 2 EStG besteuert ihn
-   *     mit einem eigenen Satz von 25 %.
-   *   - Systematik: er steht deshalb weder in der "Summe der positiven
-   *     gewerblichen Einkuenfte" noch in der "Summe aller positiven Einkuenfte"
-   *     des S. 2. Eine Steuer in den Multiplikator aufzunehmen, deren
-   *     Bemessungsgrundlage in der Quote fehlt, zerstoert die Proportionalitaet,
-   *     die die Vorschrift herstellen will. Die Parallele ist die
-   *     Abgeltungsteuer: auch sie bleibt aussen vor, und S. 4 nennt mit § 32d
-   *     Abs. 6 S. 2 EStG gerade nur den Fall, in dem die Kapitalerkuenfte in das
-   *     zvE zurueckkehren.
-   *   - Periodenbezug: § 35 Abs. 1 S. 1 Nr. 1 EStG knuepft an den Messbetrag des
-   *     dem Veranlagungszeitraum entsprechenden Erhebungszeitraums. Die
-   *     Nachsteuer trifft Gewinne frueherer Jahre, deren Messbetraege dort
-   *     bereits ihr eigenes Anrechnungsvolumen erzeugt haben. Sie hier
-   *     einzubeziehen, oeffnete einen periodenuebergreifenden Transfer, den § 35
-   *     EStG mit dem Verbot des Vor- und Ruecktrags gerade ausschliesst.
-   * Die Wirkung ist erheblich: bindet der Hoechstbetrag, kippt die Anrechnung
-   * vollstaendig (Kontrollfall "Nachsteuer erhoeht den Hoechstbetrag nicht").
+   * Dieser Block steht VOR dem Ermaessigungshoechstbetrag, weil die Nachsteuer
+   * in dessen Bemessungsgrundlage eingeht (siehe dort). Eine Zirkularitaet
+   * entsteht dadurch nicht: der Nachversteuerungsbetrag haengt allein von
+   * Entnahmen, Gewerbesteuer und Thesaurierungssteuer ab, nicht von der
+   * Steuerermaessigung des § 35 EStG.
    */
-  const hbBasis = szenario.optionen.est34aImHoechstbetrag
-    ? estGesamtTariflich + est34a
-    : estGesamtTariflich;
-  const hb = hoechstbetrag35(hbBasis, G, szenario);
-  const erm = ermaessigung35(gew.messbetrag, gew.steuer, hb.betrag);
-
-  const estFestgesetztGesamt = Math.max(0, estGesamtTariflich + est34a - erm.anrechnung);
-  const solzGesamt = solzAufEst(estFestgesetztGesamt, solzOpt);
-  const estFestgesetzt = estFestgesetztGesamt - estSockel;
-  const solz = solzGesamt - solzAufEst(estSockel, solzOpt);
-
-  // Nachversteuerung (§ 34a Abs. 4 EStG): laufender Entnahmeueberhang gegen den
-  // zum Ende des Vorjahres festgestellten nachversteuerungspflichtigen Betrag.
   const entnahmenGesamt = V + entnahmeFrei + gew.steuer + est34a + solz34a;
   const ueberhang = Math.max(0, entnahmenGesamt - G);
   let nachversteuerungsbetrag = Math.min(state.nvB, ueberhang);
@@ -419,6 +381,44 @@ function periodePersG34a(vz, szenario, state, istSchluss) {
   const nvGesamt = nachversteuerungsbetrag + schlussNachversteuerung;
   const nvSteuer = KONSTANTEN.nachversteuerungssatz34a * nvGesamt;
   const solzNv = solzPauschal(nvSteuer);
+
+  /*
+   * Bemessungsgrundlage des Ermaessigungshoechstbetrags (§ 35 Abs. 1 S. 2 EStG).
+   *
+   * Einbezogen werden nach der Auffassung der Finanzverwaltung, der die Arbeit
+   * folgt (BMF vom 03.11.2016, BStBl I 2016, 1187, Rn. 15; Abschnitt 2.1.1):
+   *   - die Steuer auf den beguenstigten Gewinn nach § 34a Abs. 1 EStG
+   *     ("Nicht entnommene Gewinne i. S. d. § 34a EStG sind im
+   *     Veranlagungszeitraum ihrer beguenstigten Besteuerung bei der
+   *     Steuerermaessigung nach § 35 EStG einzubeziehen"), und
+   *   - die Nachsteuer des § 34a Abs. 4 EStG: im Veranlagungszeitraum der
+   *     Nachversteuerung "gehoert die Einkommensteuer auf den
+   *     Nachversteuerungsbetrag zur tariflichen Einkommensteuer".
+   *
+   * Die Nachversteuerungsbetraege selbst gehoeren nach derselben Randnummer
+   * ausdruecklich NICHT zu den beguenstigten gewerblichen Einkuenften. Sie
+   * erhoehen deshalb weder den Zaehler noch den Nenner des Quotienten - nur den
+   * Multiplikator. Diese Asymmetrie ist gewollt und wird hier bewusst so
+   * abgebildet; der Nachversteuerungsbetrag wird `hoechstbetrag35` daher nicht
+   * uebergeben.
+   *
+   * Kritisch dazu: eine Steuer in den Multiplikator aufzunehmen, deren
+   * Bemessungsgrundlage in der Quote fehlt, durchbricht die Proportionalitaet,
+   * die S. 2 herstellen soll, und laesst den Messbetrag des laufenden Jahres
+   * mittelbar auf Steuer auf Gewinne frueherer Jahre wirken. Die Arbeit folgt
+   * gleichwohl der Verwaltungsauffassung; die Option schaltet beide Bestandteile
+   * gemeinsam ab und zeigt die Gegenauffassung.
+   */
+  const hbBasis = szenario.optionen.est34aImHoechstbetrag
+    ? estGesamtTariflich + est34a + nvSteuer
+    : estGesamtTariflich;
+  const hb = hoechstbetrag35(hbBasis, G, szenario);
+  const erm = ermaessigung35(gew.messbetrag, gew.steuer, hb.betrag);
+
+  const estFestgesetztGesamt = Math.max(0, estGesamtTariflich + est34a - erm.anrechnung);
+  const solzGesamt = solzAufEst(estFestgesetztGesamt, solzOpt);
+  const estFestgesetzt = estFestgesetztGesamt - estSockel;
+  const solz = solzGesamt - solzAufEst(estSockel, solzOpt);
 
   const gesamt = gew.steuer + estFestgesetzt + solz + nvSteuer + solzNv;
 

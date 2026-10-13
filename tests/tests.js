@@ -8,7 +8,10 @@
  *   T(...)  Struktur- und Verhaltenspruefungen (Monotonie, Linearitaet, Grenzen
  *           des Anrechnungsvolumens nach § 35 EStG, Uebergang zum Mindesthebesatz).
  *
- * Das Pruefszenario ist bewusst nicht aus STANDARD_SZENARIO abgeleitet.
+ * Das Pruefszenario ist bewusst nicht aus STANDARD_SZENARIO abgeleitet. Einzige
+ * Ausnahme ist der Abschnitt "Veroeffentlichte Ergebnisse der Arbeit" am Ende:
+ * dort ist gerade zu pruefen, dass die Voreinstellung des Tools das
+ * Basisszenario abbildet und die abgedruckten Zahlen reproduziert.
  */
 
 import { berechne, STANDARD_SZENARIO } from '../src/core/model.js';
@@ -433,16 +436,51 @@ T('§ 34a EStG: ohne Einbeziehung zehrt der Sondertarif den Höchstbetrag auf', 
   nah(ueberhang.betrag, 4 * 9642.5, 1);
 });
 
-T('§ 34a Abs. 4 EStG: die Nachsteuer erhoeht den Ermaessigungshoechstbetrag nicht', () => {
-  // Der Nachversteuerungsbetrag ist keine Einkunft und nicht Teil des zvE. Er
-  // steht deshalb in keiner der beiden Summen des § 35 Abs. 1 S. 2 EStG; die
-  // Steuer darauf darf den Multiplikator nicht erhoehen.
+H('Sollwert 13 - § 34a Abs. 4 EStG: die Nachsteuer geht in den Hoechstbetrag ein', () => {
+  // BMF vom 03.11.2016, BStBl I 2016, 1187, Rn. 15: im Veranlagungszeitraum der
+  // Nachversteuerung gehoert "die Einkommensteuer auf den Nachversteuerungs-
+  // betrag zur tariflichen Einkommensteuer", die Nachversteuerungsbetraege
+  // selbst aber NICHT zu den beguenstigten gewerblichen Einkuenften. Die
+  // Nachsteuer erhoeht daher den Multiplikator des § 35 Abs. 1 S. 2 EStG, nicht
+  // den Quotienten.
   //
-  // Konstellation: volle Thesaurierung, Sondertarif ausserhalb des
-  // Hoechstbetrags, Schlussausschuettung. Der regelbesteuerte Gewinnanteil ist
-  // 0, also ist der Hoechstbetrag 0 - und zwar trotz einer Nachsteuer von
-  // 210.588,75 EUR in derselben Periode. Ginge sie ein, waere der Hoechstbetrag
-  // groesser als die Gewerbesteuer und die Anrechnung kippte vollstaendig.
+  // Konstellation: G 300.000, h 300 %, volle Thesaurierung, Schlussausschuettung
+  // in derselben (einzigen) Periode, kein Sockel. Dann ist der regelbesteuerte
+  // Gewinnanteil 0 und die tarifliche ESt darauf ebenfalls 0, sodass sich der
+  // Hoechstbetrag allein aus den § 34a-Bestandteilen speist.
+  //
+  //   Messbetrag       = (300.000 - 24.500) * 3,5 %      =  9.642,50
+  //   GewSt            = 9.642,50 * 300 %                = 28.927,50
+  //   B                = 300.000 (volle Thesaurierung)
+  //   ESt § 34a Abs. 1 = 28,25 % * 300.000               = 84.750,00
+  //   SolZ darauf      = 5,5 % * 84.750                  =  4.661,25
+  //   nvB-Zugang       = 300.000 - 84.750 - 4.661,25     = 210.588,75
+  //   Nachsteuer       = 25 % * 210.588,75               = 52.647,1875
+  //   Quotient         = 300.000 / 300.000               = 1
+  //   Hoechstbetrag    = 0 + 84.750 + 52.647,1875        = 137.397,1875
+  //   Volumen 4 x M    = 4 * 9.642,50                    = 38.570,00
+  //   Anrechnung       = min(38.570 ; 28.927,50 ; 137.397,1875) = 28.927,50
+  const s = basis({
+    gewinn: 300000,
+    hebesatz: 300,
+    thesaurierungsquote: 1,
+    optionen: { schlussausschuettung: true },
+  });
+  const p = berechne(s).varianten.persG34a.perioden[0];
+  const holen = (l) => p.posten.find((x) => x.label.startsWith(l)).betrag;
+  // Die Nachsteuer muss ueberhaupt anfallen, sonst prueft der Fall nichts.
+  nah(holen('Nachversteuerungsbetrag'), 210588.75, 0.02);
+  nah(holen('Ermäßigungshöchstbetrag'), 137397.1875, 0.02);
+  nah(holen('./. Steuerermäßigung'), -28927.5, 0.02);
+  // Die Gewerbesteuer ist damit vollstaendig angerechnet.
+  nah(holen('nicht angerechnete Gewerbesteuer'), 0, 0.02);
+});
+
+T('§ 34a Abs. 4 EStG: ohne Einbeziehung entfaellt die Nachsteuer aus dem Hoechstbetrag', () => {
+  // Gegenauffassung: die Option entfernt beide § 34a-Bestandteile gemeinsam.
+  // Derselbe Fall wie vorstehend, nur mit abgeschalteter Option. Der
+  // regelbesteuerte Anteil ist 0, also ist der Hoechstbetrag 0 und die gesamte
+  // Gewerbesteuer bleibt endgueltig.
   const s = basis({
     gewinn: 300000,
     hebesatz: 300,
@@ -451,15 +489,35 @@ T('§ 34a Abs. 4 EStG: die Nachsteuer erhoeht den Ermaessigungshoechstbetrag nic
   });
   const p = berechne(s).varianten.persG34a.perioden[0];
   const holen = (l) => p.posten.find((x) => x.label.startsWith(l)).betrag;
-  const nachsteuer = holen('Nachversteuerung');
-  // Die Nachsteuer muss ueberhaupt anfallen, sonst prueft der Fall nichts.
-  if (!(nachsteuer > 100000)) {
-    throw new Error(`Nachsteuer zu klein, Fall prueft nichts: ${nachsteuer.toFixed(2)}`);
-  }
+  nah(holen('Nachversteuerungsbetrag'), 210588.75, 0.02);
   nah(holen('Ermäßigungshöchstbetrag'), 0, 0.01);
   nah(holen('./. Steuerermäßigung'), 0, 0.01);
-  // Die gesamte Gewerbesteuer bleibt endgueltig: 9.642,50 * 3 = 28.927,50
   nah(holen('nicht angerechnete Gewerbesteuer'), 28927.5, 0.02);
+});
+
+T('§ 35 Abs. 1 S. 2 EStG: der Nachversteuerungsbetrag erhoeht den Quotienten nicht', () => {
+  // Kehrseite der Asymmetrie aus BMF Rn. 15. Mit einem Sockel weiterer
+  // Einkuenfte ist der Quotient gewerbliche / alle Einkuenfte kleiner als 1.
+  // Waere der Nachversteuerungsbetrag als gewerbliche Einkunft mitgezaehlt,
+  // wuerde der Quotient steigen. Er muss unveraendert G / (G + W) betragen.
+  const W = 200000;
+  const s = basis({
+    gewinn: 300000,
+    hebesatz: 300,
+    thesaurierungsquote: 1,
+    weitereEinkuenfte: W,
+    optionen: { schlussausschuettung: true },
+  });
+  const p = berechne(s).varianten.persG34a.perioden[0];
+  const holen = (l) => p.posten.find((x) => x.label.startsWith(l)).betrag;
+  const nv = holen('Nachversteuerungsbetrag');
+  if (!(nv > 100000)) {
+    throw new Error(`Nachsteuer zu klein, Fall prueft nichts: ${nv.toFixed(2)}`);
+  }
+  // Quotient aus dem ausgewiesenen Hoechstbetrag zurueckgerechnet.
+  const hb = holen('Ermäßigungshöchstbetrag');
+  const basisSteuer = estTarif(W + 0, 2026) + 0.2825 * 300000 + 0.25 * nv;
+  nah(hb, basisSteuer * (300000 / (300000 + W)), 1);
 });
 
 T('§ 34a EStG: Einbeziehung in den Hoechstbetrag ist Standard und erhaelt die Anrechnung', () => {
@@ -986,6 +1044,137 @@ T('Gewerbesteuerfreibetrag entlastet die PersG im unteren Gewinnbereich', () => 
   const gmbh = e.varianten.gmbh.perioden[0].komponenten.gewerbesteuer;
   nah(persG, (40000 - 24500) * 0.035 * 4);
   nah(gmbh, 40000 * 0.035 * 4);
+});
+
+/* ---------------- Veroeffentlichte Ergebnisse der Arbeit ---------------- *
+ *
+ * Dieser Abschnitt fixiert die in der Arbeit abgedruckten Zahlen. Er ist der
+ * einzige, der bewusst STANDARD_SZENARIO verwendet: gepruefte Groesse ist hier
+ * gerade, dass die Voreinstellung des Tools das Basisszenario aus Abschnitt 3.1
+ * abbildet und die Tabelle der Arbeit reproduziert. Eine Aenderung der
+ * Voreinstellungen MUSS diese Faelle brechen - sonst wuerde die Arbeit
+ * stillschweigend von ihrer eigenen Datengrundlage abweichen.
+ * ---------------------------------------------------------------------- */
+
+H('Sollwert 14 - Tabelle 2 der Arbeit: alle neun Hebesatzzeilen', () => {
+  // Barwert der Gesamtsteuerbelastung in % des Barwerts des Gewinns vor
+  // Steuern, VZ 2026-2032, Basisszenario (G 500.000, V 100.000, Entnahmequote
+  // 50 %, Zins 3 %). Werte wie in der Arbeit abgedruckt.
+  const soll = [
+    // Hebesatz, PersG Regel, PersG § 34a, GmbH/Option
+    [280, 42.85, 42.03, 40.66],
+    [320, 42.78, 41.96, 41.5],
+    [360, 42.71, 41.9, 42.34],
+    [400, 42.63, 41.84, 43.17],
+    [440, 43.97, 43.18, 44.01],
+    [480, 45.3, 44.52, 44.85],
+    [520, 46.63, 45.86, 45.69],
+    [560, 47.96, 47.2, 46.52],
+    [600, 49.29, 48.54, 47.36],
+  ];
+  for (const [h, regel, a34, kap] of soll) {
+    const e = berechne({ ...STANDARD_SZENARIO, hebesatz: h });
+    const ist = (k) => Math.round(e.varianten[k].effektiv * 10000) / 100;
+    for (const [k, s] of [['persG', regel], ['persG34a', a34], ['gmbh', kap], ['optierend', kap]]) {
+      if (Math.abs(ist(k) - s) > 0.005) {
+        throw new Error(`h = ${h} %, ${k}: erwartet ${s.toFixed(2)} %, erhalten ${ist(k).toFixed(2)} %`);
+      }
+    }
+  }
+});
+
+T('Arbeit Abschnitt 3.2: Vorteilsfenster und Steigungen', () => {
+  const eff = (e, k) => e.varianten[k].effektiv * 100;
+  const bei = (h, ueb = {}) => berechne({ ...STANDARD_SZENARIO, hebesatz: h, ...ueb });
+
+  // Steigung oberhalb von 400 %: rund 0,67 pp je 20 Hebesatzpunkte (PersG),
+  // rund 0,42 pp je 20 Punkte bei der Kapitalgesellschaft.
+  nah(eff(bei(440), 'persG') - eff(bei(420), 'persG'), 0.67, 0.01);
+  nah(eff(bei(420), 'gmbh') - eff(bei(400), 'gmbh'), 0.42, 0.01);
+  // § 34a verlaeuft rund 0,8 pp unterhalb der Regelbesteuerung.
+  nah(eff(bei(400), 'persG') - eff(bei(400), 'persG34a'), 0.79, 0.02);
+
+  // Zwei Schnittpunkte je Variante; Lage wie in Abschnitt 3.2 angegeben.
+  const grenzen = (key) => {
+    const g = [];
+    let vor = null;
+    for (let h = 280; h <= 600; h += 0.25) {
+      const e = bei(h);
+      const besser = e.varianten[key].barwert < e.varianten.gmbh.barwert;
+      if (vor !== null && besser !== vor) g.push(h);
+      vor = besser;
+    }
+    return g;
+  };
+  const gRegel = grenzen('persG');
+  gleich(gRegel.length, 2);
+  nah(gRegel[0], 376.5, 0.5);
+  nah(gRegel[1], 444, 0.5);
+  const g34a = grenzen('persG34a');
+  gleich(g34a.length, 2);
+  nah(g34a[0], 341, 0.5);
+  nah(g34a[1], 507, 0.5);
+});
+
+T('Arbeit Abschnitt 3.2: Kontrollrechnung ohne Tätigkeitsvergütung', () => {
+  const eff = (e, k) => e.varianten[k].effektiv * 100;
+  const ohneV = (h) => berechne({ ...STANDARD_SZENARIO, verguetung: 0, hebesatz: h });
+  // Bei 400 %: § 34a 41,97 % gegenüber GmbH 45,94 %.
+  nah(eff(ohneV(400), 'persG34a'), 41.97, 0.005);
+  nah(eff(ohneV(400), 'gmbh'), 45.94, 0.005);
+  // Die GmbH ist nur noch unterhalb von rund 282 % günstiger als die
+  // regelbesteuerte PersG.
+  let wechsel = null;
+  for (let h = 280; h <= 600 && wechsel === null; h += 0.5) {
+    const e = ohneV(h);
+    if (e.varianten.persG.barwert < e.varianten.gmbh.barwert) wechsel = h;
+  }
+  nah(wechsel, 282, 1);
+  // § 34a unterbietet die GmbH im gesamten Bereich.
+  for (let h = 280; h <= 600; h += 20) {
+    const e = ohneV(h);
+    if (!(e.varianten.persG34a.barwert < e.varianten.gmbh.barwert)) {
+      throw new Error(`bei h = ${h} % ist § 34a nicht günstiger als die GmbH`);
+    }
+  }
+});
+
+T('Arbeit Abschnitt 3.2: Stundungsabhängigkeit und Entnahmequote', () => {
+  const eff = (e, k) => e.varianten[k].effektiv * 100;
+  const zins = (z) => berechne({ ...STANDARD_SZENARIO, kalkulationszins: z });
+  // Bei Zins 0 liegt § 34a praktisch gleichauf mit der Regelbesteuerung.
+  nah(eff(zins(0), 'persG34a'), 42.57, 0.005);
+  nah(eff(zins(0), 'persG'), 42.63, 0.005);
+  nah(eff(zins(0.06), 'persG34a'), 41.16, 0.005);
+
+  // Nicht monotoner Verlauf über die Entnahmequote mit Minimum bei rund 53 %.
+  // Die Quote des Szenarios ist die Thesaurierungsquote: q = 1 - Entnahmequote.
+  const beiQuote = (entnahmeProzent) =>
+    eff(berechne({ ...STANDARD_SZENARIO, thesaurierungsquote: 1 - entnahmeProzent / 100 }), 'persG34a');
+  let best = null;
+  for (let q = 0; q <= 100; q += 0.5) {
+    const v = beiQuote(q);
+    if (best === null || v < best[1]) best = [q, v];
+  }
+  nah(best[0], 53, 1);
+  // Bei vollständiger Thesaurierung 42,27 %, unter der Regelbesteuerung.
+  nah(beiQuote(0), 42.27, 0.005);
+  if (!(beiQuote(0) < eff(berechne(STANDARD_SZENARIO), 'persG'))) {
+    throw new Error('volle Thesaurierung müsste unter der Regelbesteuerung liegen');
+  }
+});
+
+T('Arbeit Abschnitt 2.5: Einbeziehung in den Hoechstbetrag wirkt rund 7,5 pp', () => {
+  // Der in Abschnitt 2.5 berichtete Befund: ohne Einbeziehung der
+  // Thesaurierungssteuer war die Belastung der PersG bei vollständiger
+  // Thesaurierung um rund 7,5 Prozentpunkte überhöht.
+  const s = { ...STANDARD_SZENARIO, thesaurierungsquote: 1 };
+  const mit = berechne(s).varianten.persG34a.effektiv * 100;
+  const ohne = berechne({
+    ...s,
+    optionen: { ...STANDARD_SZENARIO.optionen, est34aImHoechstbetrag: false },
+  }).varianten.persG34a.effektiv * 100;
+  nah(ohne - mit, 7.5, 0.1);
 });
 
 /* ---------------- Ausfuehrung ---------------- */

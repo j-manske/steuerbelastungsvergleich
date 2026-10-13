@@ -20,7 +20,7 @@ export const KONSTANTEN = {
 
 /**
  * Tarifparameter des § 32a EStG. Der Tarif wird annahmegemaess ueber den
- * gesamten Betrachtungszeitraum konstant gehalten (Tabelle 2 der Arbeit);
+ * gesamten Betrachtungszeitraum konstant gehalten (Tabelle 1 der Arbeit);
  * massgeblich ist der hier gewaehlte Referenz-VZ.
  */
 export const EST_TARIFE = {

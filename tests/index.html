@@ -84,7 +84,9 @@
         `Davon ${handgerechnet} Fälle mit fest vorgegebenem, von Hand gerechnetem Sollwert ` +
         `(im Quelltext als Rechenweg ausgeschrieben). Die übrigen Fälle prüfen Struktur- und ` +
         `Verhaltenseigenschaften. Das Prüfszenario ist bewusst nicht aus dem Basisszenario ` +
-        `abgeleitet, damit eine Änderung der Voreinstellungen die Sollwerte nicht verschiebt.`;
+        `abgeleitet, damit eine Änderung der Voreinstellungen die Sollwerte nicht verschiebt. ` +
+        `Ausgenommen ist der letzte Abschnitt: er prüft gerade, dass die Voreinstellung das ` +
+        `Basisszenario der Arbeit abbildet und deren abgedruckte Ergebnisse reproduziert.`;
       document.getElementById('liste').innerHTML = ergebnisse
         .map(
           (r) =>
